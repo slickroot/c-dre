@@ -39,3 +39,15 @@ void paint_label(const struct text_buffer *buf, int cols, int row) {
                    (cols - buf->len) / 2 + buf->cursor + 1);
   write(STDOUT_FILENO, caret, c);
 }
+
+void paint_delete_row(int row) {
+  char top[32];
+  int t = snprintf(top, sizeof top, "\x1b[%d;1H", row);
+
+  write(STDOUT_FILENO, top, t);
+  write(STDOUT_FILENO, "\x1b[M", sizeof "\x1b[M" - 1);
+}
+
+void paint_hide_cursor(void) {
+  write(STDOUT_FILENO, "\x1b[?25l", sizeof "\x1b[?25l" - 1);
+}
