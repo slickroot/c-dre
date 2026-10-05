@@ -45,6 +45,36 @@ static void restore(void) {
   fflush(stdout);
 }
 
+static void delete_selected(void) {
+  if (!selected)
+    return;
+
+  struct band *victim = selected;
+  int old_row = victim->row;
+  struct band *heir = victim->next ? victim->next : victim->prev;
+
+  if (victim->prev)
+    victim->prev->next = victim->next;
+  if (victim->next)
+    victim->next->prev = victim->prev;
+  if (bands == victim)
+    bands = victim->next;
+
+  for (struct band *b = bands; b; b = b->next)
+    if (b->row > old_row)
+      b->row--;
+
+  text_buffer_free(&victim->buf);
+  free(victim);
+  selected = heir;
+
+  paint_delete_row(old_row);
+  if (selected)
+    paint_label(&selected->buf, cols, selected->row);
+  else
+    paint_hide_cursor();
+}
+
 int main(void) {
   if (!isatty(STDIN_FILENO)) {
     fprintf(stderr, "dre: stdin is not a terminal\n");
@@ -101,6 +131,9 @@ int main(void) {
       if (selected == NULL)
         continue;
       changed = text_buffer_insert(&selected->buf, ev.ch);
+      break;
+    case EVENT_DELETE_BAND:
+      delete_selected();
       break;
     case EVENT_BACKSPACE:
       if (selected == NULL)
