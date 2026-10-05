@@ -80,6 +80,13 @@ int main(void) {
       label[len] = 0;
       paint_label();
     }
+    if (byte == 0x7f || byte == 0x08) {
+      if (len > 0) {
+        len--;
+        label[len] = 0;
+        paint_label();
+      }
+    }
   }
 
   return 0;
