@@ -43,13 +43,22 @@ know what is already on screen" — it does not, so it still does not get one.
 
 ### Two counters, and which square gets overwritten
 
-It is not index `0`. After `a A a A A` the stream is `[A,A,a,a,a]`; painting at
+It is not index `0`. After `a A a A A` the stream is `[A,A,A,a,a]`; painting at
 the origin would overwrite an `A` with an `A`, change nothing, and grow the
 `a`-run by one. So on `A`:
 
 - the new `#2A2A2E` square goes at stream index `n_A` (overwriting the first
   `a`-square),
 - one `#3F3F46` square is appended at stream index `n_A + n_a`.
+
+The append is what makes room, so it is only written when there is an
+`a`-square to displace, i.e. when `n_a > 0`. Pressing `A` before any `a` still
+shows a dark square.
+
+Only `n_A` is incremented on `A`. The grey count is unchanged, because the
+prepended square takes the place of the grey it displaces; bumping `n_a` as
+well would make the stream longer than what is painted, and the next append
+would address a cell past the tail.
 
 Counters are incremented after the writes, so every access reads the pre-press
 value. `a` needs no index and no position at all: it appends wherever the
