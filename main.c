@@ -39,6 +39,7 @@ static void enter(void) {
 }
 
 static void restore(void) {
+  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
   write(STDOUT_FILENO, "\x1b[?1049l", sizeof "\x1b[?1049l" - 1);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_tty);
   fflush(stdout);
