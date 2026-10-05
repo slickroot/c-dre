@@ -28,14 +28,13 @@ static void restore(void) {
 }
 
 static void paint_band(void) {
-  write(STDOUT_FILENO, "\x1b[48;2;63;63;70m", sizeof "\x1b[48;2;63;63;70m" - 1);
-  write(STDOUT_FILENO, "\x1b[1;1H", sizeof "\x1b[1;1H" - 1);
-  write(STDOUT_FILENO, "\x1b[K", sizeof "\x1b[K" - 1);
-  write(STDOUT_FILENO, "\r\n", sizeof "\r\n" - 1);
-  write(STDOUT_FILENO, "\x1b[K", sizeof "\x1b[K" - 1);
-  write(STDOUT_FILENO, "\r\n", sizeof "\r\n" - 1);
-  write(STDOUT_FILENO, "\x1b[K", sizeof "\x1b[K" - 1);
-  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
+  static const char band[] = "\x1b[48;2;63;63;70m"
+                             "\x1b[1;1H"
+                             "\x1b[K\r\n"
+                             "\x1b[K\r\n"
+                             "\x1b[K"
+                             "\x1b[0m";
+  write(STDOUT_FILENO, band, sizeof band - 1);
 }
 
 int main(void) {
