@@ -26,6 +26,13 @@ static void restore(void) {
   fflush(stdout);
 }
 
+static void paint_square(void) {
+  write(STDOUT_FILENO, "\x1b[1;1H", sizeof "\x1b[1;1H" - 1);
+  write(STDOUT_FILENO, "\x1b[48;2;63;63;70m", sizeof "\x1b[48;2;63;63;70m" - 1);
+  write(STDOUT_FILENO, "  ", sizeof "  " - 1);
+  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
+}
+
 int main(void) {
   if (!isatty(STDIN_FILENO)) {
     fprintf(stderr, "dre: stdin is not a terminal\n");
@@ -39,6 +46,8 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
+    if (byte == 'a')
+      paint_square();
   }
 
   return 0;
