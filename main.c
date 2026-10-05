@@ -11,6 +11,7 @@ static int cols;
 static char *label;
 static int len;
 static int cursor;
+static int seq;
 static int band_drawn;
 
 static void enter(void) {
@@ -83,11 +84,50 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
-    if (!band_drawn && byte == 'a') {
-      band_drawn = 1;
-      paint_label();
+    if (seq == 0) {
+      if (byte == 0x1b) {
+        seq = 1;
+        continue;
+      }
+      if (!band_drawn && byte == 'a') {
+        band_drawn = 1;
+        paint_label();
+        continue;
+      }
+      if (byte == 0x7f || byte == 0x08) {
+        if (len > 0) {
+          len--;
+          label[len] = 0;
+          paint_label();
+        }
+        continue;
+      }
+      if (byte >= 0x20 && byte <= 0x7e && len < cols) {
+        memmove(&label[cursor + 1], &label[cursor], len - cursor);
+        label[cursor] = byte;
+        len++;
+        cursor++;
+        label[len] = 0;
+        paint_label();
+      }
       continue;
     }
+
+    if (seq == 1 && byte == 0x5b) {
+      // `[` is 0x5b, inside the final-byte range, so it must be taken as the
+      // introducer before the final-byte rule gets a chance to end the sequence.
+      seq = 2;
+      continue;
+    }
+
+    if (seq == 2 && byte < 0x40) {
+      // Parameters are consumed and thrown away; a 0x1b abandons the sequence.
+      if (byte == 0x1b)
+        seq = 1;
+      continue;
+    }
+
+    seq = 0;
     if (byte == 'D') {
       if (cursor > 0)
         cursor--;
@@ -97,21 +137,6 @@ int main(void) {
       if (cursor < len)
         cursor++;
       paint_label();
-    }
-    if (byte >= 0x20 && byte <= 0x7e && len < cols) {
-      memmove(&label[cursor + 1], &label[cursor], len - cursor);
-      label[cursor] = byte;
-      len++;
-      cursor++;
-      label[len] = 0;
-      paint_label();
-    }
-    if (byte == 0x7f || byte == 0x08) {
-      if (len > 0) {
-        len--;
-        label[len] = 0;
-        paint_label();
-      }
     }
   }
 
