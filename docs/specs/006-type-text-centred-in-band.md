@@ -10,8 +10,9 @@ canvas.
 1. Doug runs `./dre`, presses `a`, then types `deploy`.
 2. The band is 3 rows of `#3F3F46`, full terminal width, at the top.
 3. Nothing is on the band until he types.
-4. Each character appears on the middle row as he types it, so `deploy` reads
-   left to right once he's done.
+4. The `a` that summons the band does not appear as text. Each character he
+   types afterwards appears on the middle row, so `deploy` reads left to right
+   once he's done.
 5. The text is `#C9C9CF`.
 6. The text stays horizontally centred after every keystroke, within one cell
    when the width doesn't divide evenly.
@@ -51,23 +52,36 @@ owns one number, `cols`, and uses it only for horizontal centring of text.
 Every other use of geometry remains declined. The thing 003 said a later story
 would have to argue past has arrived, and it argued itself out on AC6.
 
-### `a` is no longer a command
+### `a` summons the band once, and is a character after that
 
-002 through 005 gave `a` exactly one job: paint. AC1 has Doug press `a` and then
-type `deploy`, and AC4 says every character he types appears — so `a` is one of
-the characters he types, and the two readings collide.
+002 through 005 gave `a` exactly one job: paint. That job is unchanged here. What
+changed is that this story gives `a` a *second* meaning while typing, and the two
+collide — AC1 has Doug press `a` before he types anything, and every keystroke he
+makes after that must land on the band.
 
-**Decision: `a` is just a character.** The `byte == 'a'` branch in `main()` is
-deleted. The band appears because the *first printable keystroke* paints it, and
-that keystroke's own character lands on the middle row at the same time. AC1
-holds with no reserved key and no special case: press `a`, the band appears and
-`a` is on it, then type `deploy` and the label reads `adeploy`.
+An earlier draft of this design resolved the collision by deleting the command:
+`a` would become an ordinary character, the first printable keystroke would paint
+the band, and that keystroke's own glyph would land with it, so the label would
+read `adeploy`. The argument was that a canvas tool cannot reserve a letter, since
+every letter is one Doug might eventually want to write. Doug rejected that on
+review — pressing `a` draws an empty band, and no `a` appears on it. An empty
+band with the text he then types is what the acceptance criteria describe, and
+that is what this design now builds.
 
-This is the right outcome for a canvas tool. A program whose alphabet contains
-every letter Doug might want to write cannot reserve one of them, and the band
-does not need to exist before the first keystroke — AC3 only requires that
-nothing is *on* the band until he types, which holds because the first keystroke
-paints band and character together.
+**Decision: `a` is the band command on the first keystroke only, and does not
+append itself to the label.** `main()` keeps a `static int band_drawn` (or
+equivalent latch), initialised to 0. The input loop tests the first keystroke
+against `'a'`; if it matches, it sets the latch and calls `paint_label()` without
+storing the character. Every `a` after that arrives at the printable-range branch
+with the latch already set and is appended like any other letter.
+
+The latch, not `len == 0`, decides. Tying it to an empty label would re-arm the
+command whenever Doug backspaced down to nothing, so an `a` typed at the start of
+a second label would silently eat itself. One keystroke, one band, for the life of
+the process.
+
+This keeps 002's key and leaves the alphabet whole for every keystroke that
+follows, which is the compromise the collision actually forces.
 
 ### Text input: printable ASCII and Backspace
 
@@ -203,6 +217,7 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
 - `static int cols` — the cached `ws_col`, zero until `enter()` fills it
 - `static char *label` — `cols + 1` bytes, allocated in `enter()`
 - `static int len` — how much of the label is meaningful
+- `static int band_drawn` — whether the first-keystroke `a` has been spent
 - `enter()` — unchanged, plus the `TIOCGWINSZ` query, the allocation, and
   `<sys/ioctl.h>` / `<stdlib.h>` for the two. Still writes `ESC[?1049h`,
   `ESC[?25l`, the `#0A0A0B` default, `ESC[2J` and `ESC[1;1H`
@@ -210,11 +225,14 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
 - `paint_label()` — the eight-step sequence above, early-returning when `cols`
   is 0 or `len >= cols`
 - `main()` — `isatty` guard, `atexit(restore)`, `enter()`, read loop. `0x03`
-  breaks; `0x20`–`0x7e` append and repaint; `0x7f` and `0x08` delete and
-  repaint when `len > 0`; everything else is dropped
+  breaks; a first-keystroke `a` sets `band_drawn` and repaints without appending;
+  `0x20`–`0x7e` append and repaint; `0x7f` and `0x08` delete and repaint when
+  `len > 0`; everything else is dropped
 
-`paint_band()` and the `byte == 'a'` branch are deleted rather than kept as dead
-code. `paint_at()`, `paint_square()`, `n_A` and `n_a` remain gone from 005.
+`paint_band()` is deleted rather than kept as dead code. The `byte == 'a'` branch
+survives in the one form this story settles on: it now also tests `!band_drawn`,
+and it does not append. `paint_at()`, `paint_square()`, `n_A` and `n_a` remain
+gone from 005.
 
 Note that Backspace and a printable both repaint, which means the repaint is
 what the input handler calls, not the other way round. `paint_label()` takes no
@@ -226,10 +244,11 @@ state the program has carried since 005.
 ### Testing
 
 None, continuing from 001 through 005. Hand-judged in a real terminal: press `a`,
-confirm the band and a single `a` on the middle row, type `deploy`, confirm the
-label reads `adeploy` and is centred to within a cell, press Backspace,
-confirm `adeplo`, press an arrow key and confirm nothing moves, press Ctrl-C and
-confirm scrollback intact.
+confirm the band appears with no `a` on it, type `deploy`, confirm the label reads
+`deploy` and is centred to within a cell, press Backspace, confirm `deplo`, press
+`a` again and confirm it appends an `a`, backspace to empty and press `a` again
+and confirm it appends rather than repainting the band, press an arrow key and
+confirm nothing moves, press Ctrl-C and confirm scrollback intact.
 
 The pty harness the earlier specs left open is still available and is now more
 attractive than it was, because `paint_label()`'s output depends on `cols` and a
