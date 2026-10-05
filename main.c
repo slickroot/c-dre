@@ -1,9 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
 static struct termios saved_tty;
+
+static int cols;
+static char *label;
+static int len;
 
 static void enter(void) {
   tcgetattr(STDIN_FILENO, &saved_tty);
@@ -19,6 +24,14 @@ static void enter(void) {
   write(STDOUT_FILENO, "\x1b[48;2;10;10;11m", sizeof "\x1b[48;2;10;10;11m" - 1);
   write(STDOUT_FILENO, "\x1b[2J", sizeof "\x1b[2J" - 1);
   write(STDOUT_FILENO, "\x1b[1;1H", sizeof "\x1b[1;1H" - 1);
+
+  struct winsize ws;
+  ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+  cols = ws.ws_col;
+
+  label = malloc(cols + 1);
+  for (int i = 0; i <= cols; i++)
+    label[i] = 0;
 }
 
 static void restore(void) {
