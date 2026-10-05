@@ -15,6 +15,7 @@ static void enter(void) {
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
   write(STDOUT_FILENO, "\x1b[?1049h", sizeof "\x1b[?1049h" - 1);
+  write(STDOUT_FILENO, "\x1b[?25l", sizeof "\x1b[?25l" - 1);
   write(STDOUT_FILENO, "\x1b[48;2;10;10;11m", sizeof "\x1b[48;2;10;10;11m" - 1);
   write(STDOUT_FILENO, "\x1b[2J", sizeof "\x1b[2J" - 1);
 }
