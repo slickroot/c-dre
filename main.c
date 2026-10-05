@@ -81,7 +81,7 @@ int main(void) {
       paint_label();
       continue;
     }
-    if (byte >= 0x20 && byte <= 0x7e) {
+    if (byte >= 0x20 && byte <= 0x7e && len < cols) {
       label[len++] = byte;
       label[len] = 0;
       paint_label();
