@@ -49,19 +49,17 @@ int main(void) {
   struct input_parser parser;
   input_parser_init(&parser);
 
-  int band_drawn = 0;
   enum app_mode mode = MODE_MOVE;
 
   char byte;
   while (read(STDIN_FILENO, &byte, 1) == 1) {
-    struct key_event ev = input_parse(&parser, byte, mode, band_drawn);
+    struct key_event ev = input_parse(&parser, byte, mode);
     int changed = 0;
 
     switch (ev.type) {
     case EVENT_QUIT:
       goto done;
-    case EVENT_SUMMON_BAND:
-      band_drawn = 1;
+    case EVENT_ADD_BAND:
       mode = MODE_TYPE;
       paint_label(&buf, cols);
       break;

@@ -4,15 +4,15 @@ void input_parser_init(struct input_parser *parser) {
   (void)parser;
 }
 
-struct key_event input_parse(struct input_parser *parser, char byte, enum app_mode mode, int band_drawn) {
+struct key_event input_parse(struct input_parser *parser, char byte, enum app_mode mode) {
   (void)parser;
 
   if (byte == 0x03)
     return (struct key_event){ EVENT_QUIT, 0 };
 
   if (mode == MODE_MOVE) {
-    if (!band_drawn && byte == 'a')
-      return (struct key_event){ EVENT_SUMMON_BAND, 0 };
+    if (byte == 'a')
+      return (struct key_event){ EVENT_ADD_BAND, 0 };
 
     if (byte == 'i')
       return (struct key_event){ EVENT_ENTER_TYPE, 0 };
