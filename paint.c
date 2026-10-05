@@ -17,8 +17,7 @@ void paint_label(const struct text_buffer *buf, int cols, int top_row) {
   if (buf->len >= cols)
     return;
 
-  static const char bg[] = "\x1b[48;2;63;63;70m"
-                           "\x1b[38;2;201;201;207m";
+  static const char ink[] = "\x1b[38;2;201;201;207m";
   static const char erases[] = "\x1b[K\r\n"
                                "\x1b[K\r\n"
                                "\x1b[K"
@@ -27,7 +26,7 @@ void paint_label(const struct text_buffer *buf, int cols, int top_row) {
   char top[32];
   int t = snprintf(top, sizeof top, "\x1b[%d;1H", top_row);
 
-  write(STDOUT_FILENO, bg, sizeof bg - 1);
+  write(STDOUT_FILENO, ink, sizeof ink - 1);
   write(STDOUT_FILENO, top, t);
   write(STDOUT_FILENO, erases, sizeof erases - 1);
 
@@ -36,7 +35,6 @@ void paint_label(const struct text_buffer *buf, int cols, int top_row) {
 
   write(STDOUT_FILENO, cup, n);
   write(STDOUT_FILENO, buf->data, buf->len);
-  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
 
   char caret[32];
   int c = snprintf(caret, sizeof caret, "\x1b[%d;%dH", top_row + 1,
