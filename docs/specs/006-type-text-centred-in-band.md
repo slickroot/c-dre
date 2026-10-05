@@ -173,17 +173,29 @@ rather than guess at this; the same applies.
 
 **Decision: `paint_label()` writes no text at all once `len >= cols`.** AC6
 stays satisfiable because there is nothing left to centre. No wrap, no scroll,
-no write-past-the-margin surprise. Keystrokes are still accepted and `len` still
-grows — the label is frozen on screen, and Backspace shrinks `len` until it is
-under `cols` again, at which point the label reappears, centred, from the
-buffer. The freeze is visible and the recovery is automatic, which is the honest
-behaviour: the alternative, truncating to the last `cols - 1` characters, would
-silently discard what Doug typed, and wrapping across the three rows would make
-the middle row stop being the label.
+no write-past-the-margin surprise. Backspace shrinks `len` until it is under
+`cols` again, at which point the label reappears, centred, from the buffer.
 
-The overflow is recorded, not repaired, in the same spirit as 003's struck AC7
-and 005's declined short-terminal edge. It is not an acceptance criterion
-failure — AC6 says nothing about a label longer than the terminal.
+**Decision: a printable keystroke is discarded once `len == cols`.** `len` is a
+hard ceiling, not a frozen counter. This supersedes the earlier draft, which let
+`len` grow past `cols` and drew nothing.
+
+That draft could not be built as written. It also had `len` growing without bound
+while the buffer stayed `cols + 1` bytes, so the terminator store would run one
+byte past the allocation once `len` reached `cols + 1` — reachable by holding down
+a key. Capping `len` at `cols` removes the overflow by construction: `len` can
+never exceed the buffer, and the `len >= cols` guard is what stops the write in
+the last column.
+
+The cost is that characters Doug types at the boundary are dropped, and he gets no
+indication of it. That is the trade he chose on review, over the two alternatives:
+sliding the label so its tail stays visible, which discards the head of what he
+typed and makes the label move under the cursor; or growing the buffer, which
+preserves every keystroke but has no stated behaviour to preserve once `len`
+outgrows the terminal anyway.
+
+The `len >= cols` guard stays. `len == cols` is reachable — filling the band
+completely — and it is the case that would wrap.
 
 ### The buffer is sized to the terminal, and a zero width stops everything
 
@@ -207,8 +219,10 @@ any case.
 `+ 1` is for the terminator; the text write never sends it, since `CUP` plus
 `len` bytes is already exact. Sizing to the queried width rather than a
 hand-picked constant means no arbitrary limit exists to be wrong: `len` cannot
-outgrow what the terminal could show, and the `len >= cols` guard means the
-overflowing characters are stored but never drawn.
+outgrow what the terminal could show, because it is capped at `cols` and the
+terminator at `label[cols]` is the last byte the allocation has. This also settles
+the `cols == 0` case above — the append test `len < cols` is false from the
+start, so nothing is ever stored and the one-byte buffer is never written.
 
 ### Components
 
@@ -226,8 +240,9 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
   is 0 or `len >= cols`
 - `main()` — `isatty` guard, `atexit(restore)`, `enter()`, read loop. `0x03`
   breaks; a first-keystroke `a` sets `band_drawn` and repaints without appending;
-  `0x20`–`0x7e` append and repaint; `0x7f` and `0x08` delete and repaint when
-  `len > 0`; everything else is dropped
+  `0x20`–`0x7e` append and repaint while `len < cols`, and are discarded once
+  `len == cols`; `0x7f` and `0x08` delete and repaint when `len > 0`; everything
+  else is dropped
 
 `paint_band()` is deleted rather than kept as dead code. The `byte == 'a'` branch
 survives in the one form this story settles on: it now also tests `!band_drawn`,
@@ -247,8 +262,9 @@ None, continuing from 001 through 005. Hand-judged in a real terminal: press `a`
 confirm the band appears with no `a` on it, type `deploy`, confirm the label reads
 `deploy` and is centred to within a cell, press Backspace, confirm `deplo`, press
 `a` again and confirm it appends an `a`, backspace to empty and press `a` again
-and confirm it appends rather than repainting the band, press an arrow key and
-confirm nothing moves, press Ctrl-C and confirm scrollback intact.
+and confirm it appends rather than repainting the band, type past the terminal
+width and confirm the label stops accepting characters at the width, press an
+arrow key and confirm nothing moves, press Ctrl-C and confirm scrollback intact.
 
 The pty harness the earlier specs left open is still available and is now more
 attractive than it was, because `paint_label()`'s output depends on `cols` and a
