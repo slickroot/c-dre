@@ -10,6 +10,7 @@ static int cols;
 static char *label;
 static int len;
 static int band_drawn;
+static int in_escape;
 
 static void enter(void) {
   tcgetattr(STDIN_FILENO, &saved_tty);
@@ -74,6 +75,21 @@ int main(void) {
 
   char byte;
   while (read(STDIN_FILENO, &byte, 1) == 1) {
+    if (in_escape) {
+      if (byte >= 0x40 && byte <= 0x7e)
+        in_escape = 0;
+      continue;
+    }
+    if (byte == 0x1b) {
+      char next;
+      if (read(STDIN_FILENO, &next, 1) != 1)
+        break;
+      if (next == 0x5b || next == 0x4f) {
+        in_escape = 1;
+        continue;
+      }
+      byte = next;
+    }
     if (byte == 0x03)
       break;
     if (!band_drawn && byte == 'a') {
