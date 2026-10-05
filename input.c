@@ -17,6 +17,12 @@ struct key_event input_parse(struct input_parser *parser, char byte, enum app_mo
     if (byte == 'i')
       return (struct key_event){ EVENT_ENTER_TYPE, 0 };
 
+    if (byte == 'k')
+      return (struct key_event){ EVENT_SELECT_UP, 0 };
+
+    if (byte == 'j')
+      return (struct key_event){ EVENT_SELECT_DOWN, 0 };
+
     return (struct key_event){ EVENT_NONE, 0 };
   }
 
