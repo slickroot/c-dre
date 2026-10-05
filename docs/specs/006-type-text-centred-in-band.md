@@ -20,7 +20,10 @@ canvas.
    every cell outside it stays `#0A0A0B`.
 8. No cursor is visible.
 9. Non-printable keys other than Ctrl-C do nothing and show nothing, except
-   Backspace, which deletes the last character of the label and repaints.
+   Backspace, which deletes the last character of the label and repaints. Arrow
+   keys are the known exception: in raw mode they arrive as an escape sequence
+   whose trailing bytes are ordinary printable ASCII, so they are stored as text.
+   See "Text input: printable ASCII and Backspace".
 10. Ctrl-C returns Doug to his shell with scrollback intact.
 
 ## Technical Design
@@ -97,40 +100,46 @@ screen to show where the caret is — the label would slide invisibly, or the
 story would need a visible caret it never mentions. Caret movement is a
 text-field feature and belongs to its own story.
 
-Making arrows show *nothing* still requires consuming the sequence, and this
-story has to do it: AC9 says non-printable keys show nothing, and `ESC [ D` is
-a non-printable key. An earlier draft of this design claimed the printable-range
-restriction covered it, reasoning that the buffer could never hold a byte that
-`ESC`-prefixes into a sequence. That reasoning was wrong, and visibly so:
-excluding `0x1b` from being *stored* says nothing about the bytes *after* it, and
-those are ordinary printable ASCII. Pressing Left stored `[D`, because `0x5b` and
-`0x44` both sit inside `0x20`–`0x7e`.
+Making arrows show *nothing* is a separate problem, and it turned out to have no
+answer here. An earlier draft claimed the printable-range restriction covered it,
+reasoning that the buffer could never hold a byte that `ESC`-prefixes into a
+sequence. That reasoning was wrong, and visibly so: excluding `0x1b` from being
+*stored* says nothing about the bytes *after* it, and those are ordinary printable
+ASCII. Pressing Left stored `[D`, because `0x5b` and `0x44` both sit inside
+`0x20`–`0x7e`.
 
-**Decision: an escape sequence is swallowed whole.** A `static int in_escape`
-latch records that a sequence is in progress. `0x1b` sets it. While it is set,
-bytes are dropped until one arrives in the CSI parameter/final range `0x40`–`0x7e`,
-which is consumed to end the sequence — that is `D` in `ESC [ D` and the `O` in
-the SS3 forms like `ESC O A`.
+A second draft tried to swallow sequences whole — latch on `0x1b`, drop bytes
+until a terminator in `0x40`–`0x7e`. It consumed arrows correctly and then, in
+testing, ate a character Doug had typed: `Escape` then `[` then `a` produced `dc`,
+because `a` is `0x61` and therefore a terminator. `ESC` `[` `D` is byte-identical
+to the Left arrow, and `ESC` `[` `a` is byte-identical to nothing Doug would send
+by hand — the two cases cannot be told apart by content, because `[` and `O` are
+themselves typeable. Only arrival time separates them.
 
-A bare `Escape` press is the case that stops this being a one-liner: it arrives
-as a lone `0x1b` with nothing after it. Swallowing "everything until a
-terminator" would eat the next real character Doug types, so `0x1b` only opens
-the latch when the byte immediately after it is `0x5b` (`[`) or `0x4f` (`O`),
-which is what makes it a sequence rather than the Escape key.
+**Decision: arrows insert their trailing bytes, and AC9 is amended to say so.**
+`0x1b` is dropped and `[D` is stored, which is what a program treating all of
+`0x20`–`0x7e` as text must do. No latch, no parsing, no timing heuristic.
 
-This consumes sequences without interpreting them. No parameter is parsed, no
-key is identified, no caret moves — the bytes are read and discarded so that
-AC9 holds. The arrows arrive, are recognised as not text, and vanish.
+The alternative was a non-blocking read with a short timeout after `ESC`, so that
+a following byte arriving within a few milliseconds counts as a sequence. That
+works, and it is the standard technique — but it adds a latency knob to a program
+that has none, and it fails differently: pasted `ESC`-prefixed data, terminal
+redraws under tmux or screen, and a link slow enough to split one sequence across
+the timeout. Trade a visible `[D` for an invisible one is a bad trade in a
+program whose whole purpose is putting things on screen deliberately.
+
+Consuming the sequence properly belongs with caret movement, which needs the
+same parsing and has somewhere to put the result. 003 struck an acceptance
+criterion rather than guess at this; the same applies.
 
 Backspace is the cheap half and stays: it is one byte, either `0x7f` or `0x08`
 depending on the terminal, and deleting a character shows nothing *else*.
 
 So the input rule is: bytes `0x20` through `0x7e` append to the label while
 `len < cols`; `0x7f` and `0x08` decrement `len` when `len > 0` and repaint;
-`0x03` breaks; a first-keystroke `a` summons the band; an escape sequence opened
-by `0x1b` followed by `[` or `O` is dropped through its terminator; everything
-else is read and dropped. `0x7f` is excluded from the printable range precisely
-so Backspace stays a distinct case.
+`0x03` breaks; a first-keystroke `a` summons the band; everything else is read
+and dropped. `0x7f` is excluded from the printable range precisely so Backspace
+stays a distinct case.
 
 ### `paint_label()` replaces `paint_band()`
 
@@ -257,8 +266,6 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
 - `static char *label` — `cols + 1` bytes, allocated in `enter()`
 - `static int len` — how much of the label is meaningful
 - `static int band_drawn` — whether the first-keystroke `a` has been spent
-- `static int in_escape` — whether an escape sequence is partway through being
-  swallowed
 - `enter()` — unchanged, plus the `TIOCGWINSZ` query, the allocation, and
   `<sys/ioctl.h>` / `<stdlib.h>` for the two. Still writes `ESC[?1049h`,
   `ESC[?25l`, the `#0A0A0B` default, `ESC[2J` and `ESC[1;1H`
@@ -268,9 +275,8 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
 - `main()` — `isatty` guard, `atexit(restore)`, `enter()`, read loop. `0x03`
   breaks; a first-keystroke `a` sets `band_drawn` and repaints without appending;
   `0x20`–`0x7e` append and repaint while `len < cols`, and are discarded once
-  `len == cols`; `0x7f` and `0x08` delete and repaint when `len > 0`; an escape
-  sequence opened by `0x1b` followed by `0x5b` or `0x4f` is swallowed through
-  its `0x40`–`0x7e` terminator; everything else is dropped
+  `len == cols`; `0x7f` and `0x08` delete and repaint when `len > 0`; everything
+  else is dropped, `0x1b` among them
 
 `paint_band()` is deleted rather than kept as dead code. The `byte == 'a'` branch
 survives in the one form this story settles on: it now also tests `!band_drawn`,
@@ -291,10 +297,9 @@ confirm the band appears with no `a` on it, type `deploy`, confirm the label rea
 `deploy` and is centred to within a cell, press Backspace, confirm `deplo`, press
 `a` again and confirm it appends an `a`, backspace to empty and press `a` again
 and confirm it appends rather than repainting the band, type past the terminal
-width and confirm the label stops accepting characters at the width, press an
-arrow key and confirm nothing appears and nothing moves, press Escape alone and
-then a letter and confirm the letter is stored, press Ctrl-C and confirm
-scrollback intact.
+width and confirm the label stops accepting characters at the width, press Ctrl-C
+and confirm scrollback intact. Arrow keys are not in this list: they store their
+trailing bytes, which AC9 now records rather than prevents.
 
 The pty harness the earlier specs left open is still available and is now more
 attractive than it was, because `paint_label()`'s output depends on `cols` and a
