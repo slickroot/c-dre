@@ -61,7 +61,7 @@ int main(void) {
       goto done;
     case EVENT_ADD_BAND:
       mode = MODE_TYPE;
-      paint_label(&buf, cols);
+      paint_label(&buf, cols, 1);
       break;
     case EVENT_ESCAPE:
       mode = MODE_MOVE;
@@ -80,7 +80,7 @@ int main(void) {
     }
 
     if (changed)
-      paint_label(&buf, cols);
+      paint_label(&buf, cols, 1);
   }
 
 done:
