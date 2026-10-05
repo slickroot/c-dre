@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -9,6 +10,7 @@ static struct termios saved_tty;
 static int cols;
 static char *label;
 static int len;
+static int cursor;
 static int band_drawn;
 
 static void enter(void) {
@@ -62,6 +64,10 @@ static void paint_label(void) {
   write(STDOUT_FILENO, cup, n);
   write(STDOUT_FILENO, label, len);
   write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
+
+  char caret[32];
+  int c = snprintf(caret, sizeof caret, "\x1b[2;%dH", (cols - len) / 2 + cursor + 1);
+  write(STDOUT_FILENO, caret, c);
 }
 
 int main(void) {
@@ -83,7 +89,10 @@ int main(void) {
       continue;
     }
     if (byte >= 0x20 && byte <= 0x7e && len < cols) {
-      label[len++] = byte;
+      memmove(&label[cursor + 1], &label[cursor], len - cursor);
+      label[cursor] = byte;
+      len++;
+      cursor++;
       label[len] = 0;
       paint_label();
     }
