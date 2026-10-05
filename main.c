@@ -1,18 +1,16 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
+#include "input.h"
+#include "paint.h"
+#include "text_buffer.h"
+
 static struct termios saved_tty;
 
 static int cols;
-static char *label;
-static int len;
-static int cursor;
-static int seq;
-static int band_drawn;
 
 static void enter(void) {
   tcgetattr(STDIN_FILENO, &saved_tty);
@@ -23,52 +21,17 @@ static void enter(void) {
   raw.c_cc[VTIME] = 0;
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
-  write(STDOUT_FILENO, "\x1b[?1049h", sizeof "\x1b[?1049h" - 1);
-  write(STDOUT_FILENO, "\x1b[?25l", sizeof "\x1b[?25l" - 1);
-  write(STDOUT_FILENO, "\x1b[48;2;10;10;11m", sizeof "\x1b[48;2;10;10;11m" - 1);
-  write(STDOUT_FILENO, "\x1b[2J", sizeof "\x1b[2J" - 1);
-  write(STDOUT_FILENO, "\x1b[1;1H", sizeof "\x1b[1;1H" - 1);
+  paint_wallpaper();
 
   struct winsize ws;
   ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
   cols = ws.ws_col;
-
-  label = malloc(cols + 1);
-  for (int i = 0; i <= cols; i++)
-    label[i] = 0;
 }
 
 static void restore(void) {
   write(STDOUT_FILENO, "\x1b[?1049l", sizeof "\x1b[?1049l" - 1);
   tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_tty);
   fflush(stdout);
-}
-
-static void paint_label(void) {
-  if (cols == 0)
-    return;
-  if (len >= cols)
-    return;
-
-  static const char prefix[] = "\x1b[48;2;63;63;70m"
-                               "\x1b[38;2;201;201;207m"
-                               "\x1b[1;1H"
-                               "\x1b[K\r\n"
-                               "\x1b[K\r\n"
-                               "\x1b[K"
-                               "\x1b[?25h";
-
-  char cup[32];
-  int n = snprintf(cup, sizeof cup, "\x1b[2;%dH", (cols - len) / 2 + 1);
-
-  write(STDOUT_FILENO, prefix, sizeof prefix - 1);
-  write(STDOUT_FILENO, cup, n);
-  write(STDOUT_FILENO, label, len);
-  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
-
-  char caret[32];
-  int c = snprintf(caret, sizeof caret, "\x1b[2;%dH", (cols - len) / 2 + cursor + 1);
-  write(STDOUT_FILENO, caret, c);
 }
 
 int main(void) {
@@ -80,69 +43,49 @@ int main(void) {
   atexit(restore);
   enter();
 
+  struct text_buffer buf;
+  text_buffer_init(&buf, cols);
+
+  struct input_parser parser;
+  input_parser_init(&parser);
+
+  int band_drawn = 0;
+
   char byte;
   while (read(STDIN_FILENO, &byte, 1) == 1) {
-    if (byte == 0x03)
+    struct key_event ev = input_parse(&parser, byte, band_drawn);
+    if (ev.type == EVENT_QUIT)
       break;
-    if (seq == 1 && byte == 0x5b) {
-      // `[` is 0x5b, inside the final-byte range, so it must be taken as the
-      // introducer before the final-byte rule gets a chance to end the sequence.
-      seq = 2;
-      continue;
-    }
-
-    if (seq == 2 && byte < 0x40) {
-      // Parameters are consumed and thrown away; a 0x1b abandons the sequence.
-      if (byte == 0x1b)
-        seq = 1;
-      continue;
-    }
-
-    if (seq) {
-      seq = 0;
-      switch (byte) {
-      case 'D':
-        if (cursor > 0)
-          cursor--;
-        paint_label();
-        break;
-      case 'C':
-        if (cursor < len)
-          cursor++;
-        paint_label();
-        break;
-      }
-      continue;
-    }
-
-    if (byte == 0x1b) {
-      seq = 1;
-      continue;
-    }
-    if (!band_drawn && byte == 'a') {
+    if (ev.type == EVENT_SUMMON_BAND) {
       band_drawn = 1;
-      paint_label();
+      paint_label(&buf, cols);
       continue;
     }
-    if (byte == 0x7f || byte == 0x08) {
-      if (cursor > 0) {
-        memmove(&label[cursor - 1], &label[cursor], len - cursor);
-        len--;
-        cursor--;
-        label[len] = 0;
-        paint_label();
-      }
+    if (!band_drawn)
       continue;
+
+    int changed = 0;
+    switch (ev.type) {
+    case EVENT_CHAR:
+      changed = text_buffer_insert(&buf, ev.ch);
+      break;
+    case EVENT_BACKSPACE:
+      changed = text_buffer_backspace(&buf);
+      break;
+    case EVENT_LEFT:
+      changed = text_buffer_left(&buf);
+      break;
+    case EVENT_RIGHT:
+      changed = text_buffer_right(&buf);
+      break;
+    default:
+      break;
     }
-    if (byte >= 0x20 && byte <= 0x7e && len < cols) {
-      memmove(&label[cursor + 1], &label[cursor], len - cursor);
-      label[cursor] = byte;
-      len++;
-      cursor++;
-      label[len] = 0;
-      paint_label();
-    }
+    if (changed)
+      paint_label(&buf, cols);
   }
+
+  text_buffer_free(&buf);
 
   return 0;
 }
