@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
@@ -9,6 +10,8 @@ static struct termios saved_tty;
 static int cols;
 static char *label;
 static int len;
+static int cursor;
+static int seq;
 static int band_drawn;
 
 static void enter(void) {
@@ -62,6 +65,10 @@ static void paint_label(void) {
   write(STDOUT_FILENO, cup, n);
   write(STDOUT_FILENO, label, len);
   write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
+
+  char caret[32];
+  int c = snprintf(caret, sizeof caret, "\x1b[2;%dH", (cols - len) / 2 + cursor + 1);
+  write(STDOUT_FILENO, caret, c);
 }
 
 int main(void) {
@@ -77,22 +84,63 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
+    if (seq == 1 && byte == 0x5b) {
+      // `[` is 0x5b, inside the final-byte range, so it must be taken as the
+      // introducer before the final-byte rule gets a chance to end the sequence.
+      seq = 2;
+      continue;
+    }
+
+    if (seq == 2 && byte < 0x40) {
+      // Parameters are consumed and thrown away; a 0x1b abandons the sequence.
+      if (byte == 0x1b)
+        seq = 1;
+      continue;
+    }
+
+    if (seq) {
+      seq = 0;
+      switch (byte) {
+      case 'D':
+        if (cursor > 0)
+          cursor--;
+        paint_label();
+        break;
+      case 'C':
+        if (cursor < len)
+          cursor++;
+        paint_label();
+        break;
+      }
+      continue;
+    }
+
+    if (byte == 0x1b) {
+      seq = 1;
+      continue;
+    }
     if (!band_drawn && byte == 'a') {
       band_drawn = 1;
       paint_label();
       continue;
     }
-    if (byte >= 0x20 && byte <= 0x7e && len < cols) {
-      label[len++] = byte;
-      label[len] = 0;
-      paint_label();
-    }
     if (byte == 0x7f || byte == 0x08) {
-      if (len > 0) {
+      if (cursor > 0) {
+        memmove(&label[cursor - 1], &label[cursor], len - cursor);
         len--;
+        cursor--;
         label[len] = 0;
         paint_label();
       }
+      continue;
+    }
+    if (byte >= 0x20 && byte <= 0x7e && len < cols) {
+      memmove(&label[cursor + 1], &label[cursor], len - cursor);
+      label[cursor] = byte;
+      len++;
+      cursor++;
+      label[len] = 0;
+      paint_label();
     }
   }
 
