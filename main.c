@@ -53,7 +53,7 @@ int main(void) {
 
   char byte;
   while (read(STDIN_FILENO, &byte, 1) == 1) {
-    struct key_event ev = input_parse(&parser, byte, band_drawn);
+    struct key_event ev = input_parse(&parser, byte, MODE_TYPE, band_drawn);
     if (ev.type == EVENT_QUIT)
       break;
     if (ev.type == EVENT_SUMMON_BAND) {
@@ -71,12 +71,6 @@ int main(void) {
       break;
     case EVENT_BACKSPACE:
       changed = text_buffer_backspace(&buf);
-      break;
-    case EVENT_LEFT:
-      changed = text_buffer_left(&buf);
-      break;
-    case EVENT_RIGHT:
-      changed = text_buffer_right(&buf);
       break;
     default:
       break;
