@@ -50,41 +50,42 @@ int main(void) {
   input_parser_init(&parser);
 
   int band_drawn = 0;
+  enum app_mode mode = MODE_MOVE;
 
   char byte;
   while (read(STDIN_FILENO, &byte, 1) == 1) {
-    struct key_event ev = input_parse(&parser, byte, band_drawn);
-    if (ev.type == EVENT_QUIT)
-      break;
-    if (ev.type == EVENT_SUMMON_BAND) {
-      band_drawn = 1;
-      paint_label(&buf, cols);
-      continue;
-    }
-    if (!band_drawn)
-      continue;
-
+    struct key_event ev = input_parse(&parser, byte, mode, band_drawn);
     int changed = 0;
+
     switch (ev.type) {
+    case EVENT_QUIT:
+      goto done;
+    case EVENT_SUMMON_BAND:
+      band_drawn = 1;
+      mode = MODE_TYPE;
+      paint_label(&buf, cols);
+      break;
+    case EVENT_ESCAPE:
+      mode = MODE_MOVE;
+      break;
+    case EVENT_ENTER_TYPE:
+      mode = MODE_TYPE;
+      break;
     case EVENT_CHAR:
       changed = text_buffer_insert(&buf, ev.ch);
       break;
     case EVENT_BACKSPACE:
       changed = text_buffer_backspace(&buf);
       break;
-    case EVENT_LEFT:
-      changed = text_buffer_left(&buf);
-      break;
-    case EVENT_RIGHT:
-      changed = text_buffer_right(&buf);
-      break;
-    default:
+    case EVENT_NONE:
       break;
     }
+
     if (changed)
       paint_label(&buf, cols);
   }
 
+done:
   text_buffer_free(&buf);
 
   return 0;

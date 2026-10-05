@@ -6,9 +6,14 @@ enum key_event_type {
   EVENT_QUIT,
   EVENT_SUMMON_BAND,
   EVENT_CHAR,
-  EVENT_LEFT,
-  EVENT_RIGHT,
-  EVENT_BACKSPACE
+  EVENT_BACKSPACE,
+  EVENT_ESCAPE,
+  EVENT_ENTER_TYPE
+};
+
+enum app_mode {
+  MODE_MOVE,
+  MODE_TYPE
 };
 
 struct key_event {
@@ -17,10 +22,10 @@ struct key_event {
 };
 
 struct input_parser {
-  int seq;
+  int unused;
 };
 
 void input_parser_init(struct input_parser *parser);
-struct key_event input_parse(struct input_parser *parser, char byte, int band_drawn);
+struct key_event input_parse(struct input_parser *parser, char byte, enum app_mode mode, int band_drawn);
 
 #endif
