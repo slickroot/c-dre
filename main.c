@@ -1,11 +1,19 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/ioctl.h>
 #include <termios.h>
 #include <unistd.h>
 
 static struct termios saved_tty;
+static int cols;
+static int n_A;
+static int n_a;
 
 static void enter(void) {
+  struct winsize ws;
+  ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+  cols = ws.ws_col;
+
   tcgetattr(STDIN_FILENO, &saved_tty);
 
   struct termios raw = saved_tty;
@@ -27,10 +35,19 @@ static void restore(void) {
   fflush(stdout);
 }
 
-static void paint_square(void) {
-  write(STDOUT_FILENO, "\x1b[48;2;63;63;70m", sizeof "\x1b[48;2;63;63;70m" - 1);
+static void paint_square(int r, int g, int b) {
+  char sgr[32];
+  int len = snprintf(sgr, sizeof sgr, "\x1b[48;2;%d;%d;%dm", r, g, b);
+  write(STDOUT_FILENO, sgr, len);
   write(STDOUT_FILENO, "  ", sizeof "  " - 1);
   write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
+}
+
+static void paint_at(int i) {
+  char cup[32];
+  int len = snprintf(cup, sizeof cup, "\x1b[%d;%dH", 2 * i / cols + 1,
+                     2 * i % cols + 1);
+  write(STDOUT_FILENO, cup, len);
 }
 
 int main(void) {
@@ -46,8 +63,19 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
-    if (byte == 'a')
-      paint_square();
+    if (byte == 'a') {
+      paint_square(63, 63, 70);
+      n_a++;
+    }
+    if (byte == 'A') {
+      paint_at(n_A);
+      paint_square(42, 42, 46);
+      if (n_a > 0) {
+        paint_at(n_A + n_a);
+        paint_square(63, 63, 70);
+      }
+      n_A++;
+    }
   }
 
   return 0;
