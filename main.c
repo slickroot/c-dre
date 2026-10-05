@@ -70,8 +70,10 @@ int main(void) {
     if (byte == 'A') {
       paint_at(n_A);
       paint_square(42, 42, 46);
-      paint_at(n_A + n_a);
-      paint_square(63, 63, 70);
+      if (n_a > 0) {
+        paint_at(n_A + n_a);
+        paint_square(63, 63, 70);
+      }
       n_A++;
     }
   }
