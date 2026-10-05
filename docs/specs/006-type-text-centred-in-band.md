@@ -10,8 +10,9 @@ canvas.
 1. Doug runs `./dre`, presses `a`, then types `deploy`.
 2. The band is 3 rows of `#3F3F46`, full terminal width, at the top.
 3. Nothing is on the band until he types.
-4. Each character appears on the middle row as he types it, so `deploy` reads
-   left to right once he's done.
+4. The `a` that summons the band does not appear as text. Each character he
+   types afterwards appears on the middle row, so `deploy` reads left to right
+   once he's done.
 5. The text is `#C9C9CF`.
 6. The text stays horizontally centred after every keystroke, within one cell
    when the width doesn't divide evenly.
@@ -19,7 +20,10 @@ canvas.
    every cell outside it stays `#0A0A0B`.
 8. No cursor is visible.
 9. Non-printable keys other than Ctrl-C do nothing and show nothing, except
-   Backspace, which deletes the last character of the label and repaints.
+   Backspace, which deletes the last character of the label and repaints. Arrow
+   keys are the known exception: in raw mode they arrive as an escape sequence
+   whose trailing bytes are ordinary printable ASCII, so they are stored as text.
+   See "Text input: printable ASCII and Backspace".
 10. Ctrl-C returns Doug to his shell with scrollback intact.
 
 ## Technical Design
@@ -51,23 +55,36 @@ owns one number, `cols`, and uses it only for horizontal centring of text.
 Every other use of geometry remains declined. The thing 003 said a later story
 would have to argue past has arrived, and it argued itself out on AC6.
 
-### `a` is no longer a command
+### `a` summons the band once, and is a character after that
 
-002 through 005 gave `a` exactly one job: paint. AC1 has Doug press `a` and then
-type `deploy`, and AC4 says every character he types appears — so `a` is one of
-the characters he types, and the two readings collide.
+002 through 005 gave `a` exactly one job: paint. That job is unchanged here. What
+changed is that this story gives `a` a *second* meaning while typing, and the two
+collide — AC1 has Doug press `a` before he types anything, and every keystroke he
+makes after that must land on the band.
 
-**Decision: `a` is just a character.** The `byte == 'a'` branch in `main()` is
-deleted. The band appears because the *first printable keystroke* paints it, and
-that keystroke's own character lands on the middle row at the same time. AC1
-holds with no reserved key and no special case: press `a`, the band appears and
-`a` is on it, then type `deploy` and the label reads `adeploy`.
+An earlier draft of this design resolved the collision by deleting the command:
+`a` would become an ordinary character, the first printable keystroke would paint
+the band, and that keystroke's own glyph would land with it, so the label would
+read `adeploy`. The argument was that a canvas tool cannot reserve a letter, since
+every letter is one Doug might eventually want to write. Doug rejected that on
+review — pressing `a` draws an empty band, and no `a` appears on it. An empty
+band with the text he then types is what the acceptance criteria describe, and
+that is what this design now builds.
 
-This is the right outcome for a canvas tool. A program whose alphabet contains
-every letter Doug might want to write cannot reserve one of them, and the band
-does not need to exist before the first keystroke — AC3 only requires that
-nothing is *on* the band until he types, which holds because the first keystroke
-paints band and character together.
+**Decision: `a` is the band command on the first keystroke only, and does not
+append itself to the label.** `main()` keeps a `static int band_drawn` (or
+equivalent latch), initialised to 0. The input loop tests the first keystroke
+against `'a'`; if it matches, it sets the latch and calls `paint_label()` without
+storing the character. Every `a` after that arrives at the printable-range branch
+with the latch already set and is appended like any other letter.
+
+The latch, not `len == 0`, decides. Tying it to an empty label would re-arm the
+command whenever Doug backspaced down to nothing, so an `a` typed at the start of
+a second label would silently eat itself. One keystroke, one band, for the life of
+the process.
+
+This keeps 002's key and leaves the alphabet whole for every keystroke that
+follows, which is the compromise the collision actually forces.
 
 ### Text input: printable ASCII and Backspace
 
@@ -77,21 +94,52 @@ not work properly, with arrows and Backspace. The honest reason is that arrows
 and Backspace are not the same size of thing.
 
 In raw mode an arrow key arrives as three bytes, `ESC [ C` or `ESC [ D`, not
-one. Making arrows do something means parsing that sequence and giving the caret
-a position. AC8 says no cursor is visible, so there would be nothing on screen
-to show where the caret is — the label would slide invisibly, or the story
-would need a visible caret it never mentions. Caret movement is a text-field
-feature and belongs to its own story.
+one. Making arrows *do* something means reading that sequence and giving the
+caret a position. AC8 says no cursor is visible, so there would be nothing on
+screen to show where the caret is — the label would slide invisibly, or the
+story would need a visible caret it never mentions. Caret movement is a
+text-field feature and belongs to its own story.
+
+Making arrows show *nothing* is a separate problem, and it turned out to have no
+answer here. An earlier draft claimed the printable-range restriction covered it,
+reasoning that the buffer could never hold a byte that `ESC`-prefixes into a
+sequence. That reasoning was wrong, and visibly so: excluding `0x1b` from being
+*stored* says nothing about the bytes *after* it, and those are ordinary printable
+ASCII. Pressing Left stored `[D`, because `0x5b` and `0x44` both sit inside
+`0x20`–`0x7e`.
+
+A second draft tried to swallow sequences whole — latch on `0x1b`, drop bytes
+until a terminator in `0x40`–`0x7e`. It consumed arrows correctly and then, in
+testing, ate a character Doug had typed: `Escape` then `[` then `a` produced `dc`,
+because `a` is `0x61` and therefore a terminator. `ESC` `[` `D` is byte-identical
+to the Left arrow, and `ESC` `[` `a` is byte-identical to nothing Doug would send
+by hand — the two cases cannot be told apart by content, because `[` and `O` are
+themselves typeable. Only arrival time separates them.
+
+**Decision: arrows insert their trailing bytes, and AC9 is amended to say so.**
+`0x1b` is dropped and `[D` is stored, which is what a program treating all of
+`0x20`–`0x7e` as text must do. No latch, no parsing, no timing heuristic.
+
+The alternative was a non-blocking read with a short timeout after `ESC`, so that
+a following byte arriving within a few milliseconds counts as a sequence. That
+works, and it is the standard technique — but it adds a latency knob to a program
+that has none, and it fails differently: pasted `ESC`-prefixed data, terminal
+redraws under tmux or screen, and a link slow enough to split one sequence across
+the timeout. Trade a visible `[D` for an invisible one is a bad trade in a
+program whose whole purpose is putting things on screen deliberately.
+
+Consuming the sequence properly belongs with caret movement, which needs the
+same parsing and has somewhere to put the result. 003 struck an acceptance
+criterion rather than guess at this; the same applies.
 
 Backspace is the cheap half and stays: it is one byte, either `0x7f` or `0x08`
 depending on the terminal, and deleting a character shows nothing *else*.
 
-So the input rule is: bytes `0x20` through `0x7e` append to the label; `0x7f`
-and `0x08` decrement `len` when `len > 0` and repaint; `0x03` breaks; everything
-else is read and dropped. Restricting to `0x20`–`0x7e` also means the buffer can
-never contain a byte that `ESC`-prefixes into an escape sequence of our own
-making. `0x7f` is excluded from the printable range precisely so Backspace stays
-a distinct case.
+So the input rule is: bytes `0x20` through `0x7e` append to the label while
+`len < cols`; `0x7f` and `0x08` decrement `len` when `len > 0` and repaint;
+`0x03` breaks; a first-keystroke `a` summons the band; everything else is read
+and dropped. `0x7f` is excluded from the printable range precisely so Backspace
+stays a distinct case.
 
 ### `paint_label()` replaces `paint_band()`
 
@@ -159,17 +207,29 @@ rather than guess at this; the same applies.
 
 **Decision: `paint_label()` writes no text at all once `len >= cols`.** AC6
 stays satisfiable because there is nothing left to centre. No wrap, no scroll,
-no write-past-the-margin surprise. Keystrokes are still accepted and `len` still
-grows — the label is frozen on screen, and Backspace shrinks `len` until it is
-under `cols` again, at which point the label reappears, centred, from the
-buffer. The freeze is visible and the recovery is automatic, which is the honest
-behaviour: the alternative, truncating to the last `cols - 1` characters, would
-silently discard what Doug typed, and wrapping across the three rows would make
-the middle row stop being the label.
+no write-past-the-margin surprise. Backspace shrinks `len` until it is under
+`cols` again, at which point the label reappears, centred, from the buffer.
 
-The overflow is recorded, not repaired, in the same spirit as 003's struck AC7
-and 005's declined short-terminal edge. It is not an acceptance criterion
-failure — AC6 says nothing about a label longer than the terminal.
+**Decision: a printable keystroke is discarded once `len == cols`.** `len` is a
+hard ceiling, not a frozen counter. This supersedes the earlier draft, which let
+`len` grow past `cols` and drew nothing.
+
+That draft could not be built as written. It also had `len` growing without bound
+while the buffer stayed `cols + 1` bytes, so the terminator store would run one
+byte past the allocation once `len` reached `cols + 1` — reachable by holding down
+a key. Capping `len` at `cols` removes the overflow by construction: `len` can
+never exceed the buffer, and the `len >= cols` guard is what stops the write in
+the last column.
+
+The cost is that characters Doug types at the boundary are dropped, and he gets no
+indication of it. That is the trade he chose on review, over the two alternatives:
+sliding the label so its tail stays visible, which discards the head of what he
+typed and makes the label move under the cursor; or growing the buffer, which
+preserves every keystroke but has no stated behaviour to preserve once `len`
+outgrows the terminal anyway.
+
+The `len >= cols` guard stays. `len == cols` is reachable — filling the band
+completely — and it is the case that would wrap.
 
 ### The buffer is sized to the terminal, and a zero width stops everything
 
@@ -193,8 +253,10 @@ any case.
 `+ 1` is for the terminator; the text write never sends it, since `CUP` plus
 `len` bytes is already exact. Sizing to the queried width rather than a
 hand-picked constant means no arbitrary limit exists to be wrong: `len` cannot
-outgrow what the terminal could show, and the `len >= cols` guard means the
-overflowing characters are stored but never drawn.
+outgrow what the terminal could show, because it is capped at `cols` and the
+terminator at `label[cols]` is the last byte the allocation has. This also settles
+the `cols == 0` case above — the append test `len < cols` is false from the
+start, so nothing is ever stored and the one-byte buffer is never written.
 
 ### Components
 
@@ -203,6 +265,7 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
 - `static int cols` — the cached `ws_col`, zero until `enter()` fills it
 - `static char *label` — `cols + 1` bytes, allocated in `enter()`
 - `static int len` — how much of the label is meaningful
+- `static int band_drawn` — whether the first-keystroke `a` has been spent
 - `enter()` — unchanged, plus the `TIOCGWINSZ` query, the allocation, and
   `<sys/ioctl.h>` / `<stdlib.h>` for the two. Still writes `ESC[?1049h`,
   `ESC[?25l`, the `#0A0A0B` default, `ESC[2J` and `ESC[1;1H`
@@ -210,11 +273,15 @@ Still one `main.c`, still no module seams, still matching 001 through 005.
 - `paint_label()` — the eight-step sequence above, early-returning when `cols`
   is 0 or `len >= cols`
 - `main()` — `isatty` guard, `atexit(restore)`, `enter()`, read loop. `0x03`
-  breaks; `0x20`–`0x7e` append and repaint; `0x7f` and `0x08` delete and
-  repaint when `len > 0`; everything else is dropped
+  breaks; a first-keystroke `a` sets `band_drawn` and repaints without appending;
+  `0x20`–`0x7e` append and repaint while `len < cols`, and are discarded once
+  `len == cols`; `0x7f` and `0x08` delete and repaint when `len > 0`; everything
+  else is dropped, `0x1b` among them
 
-`paint_band()` and the `byte == 'a'` branch are deleted rather than kept as dead
-code. `paint_at()`, `paint_square()`, `n_A` and `n_a` remain gone from 005.
+`paint_band()` is deleted rather than kept as dead code. The `byte == 'a'` branch
+survives in the one form this story settles on: it now also tests `!band_drawn`,
+and it does not append. `paint_at()`, `paint_square()`, `n_A` and `n_a` remain
+gone from 005.
 
 Note that Backspace and a printable both repaint, which means the repaint is
 what the input handler calls, not the other way round. `paint_label()` takes no
@@ -226,10 +293,13 @@ state the program has carried since 005.
 ### Testing
 
 None, continuing from 001 through 005. Hand-judged in a real terminal: press `a`,
-confirm the band and a single `a` on the middle row, type `deploy`, confirm the
-label reads `adeploy` and is centred to within a cell, press Backspace,
-confirm `adeplo`, press an arrow key and confirm nothing moves, press Ctrl-C and
-confirm scrollback intact.
+confirm the band appears with no `a` on it, type `deploy`, confirm the label reads
+`deploy` and is centred to within a cell, press Backspace, confirm `deplo`, press
+`a` again and confirm it appends an `a`, backspace to empty and press `a` again
+and confirm it appends rather than repainting the band, type past the terminal
+width and confirm the label stops accepting characters at the width, press Ctrl-C
+and confirm scrollback intact. Arrow keys are not in this list: they store their
+trailing bytes, which AC9 now records rather than prevents.
 
 The pty harness the earlier specs left open is still available and is now more
 attractive than it was, because `paint_label()`'s output depends on `cols` and a
