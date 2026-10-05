@@ -1,8 +1,14 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
+
+#ifndef CLOCK_MONO
+#define CLOCK_MONO CLOCK_MONOTONIC
+#endif
 
 static struct termios saved_tty;
 static int cols;
@@ -68,14 +74,67 @@ static void press(char key) {
   }
 }
 
-int main(void) {
+static int cmp_ll(const void *l, const void *r) {
+  long long a = *(const long long *)l;
+  long long b = *(const long long *)r;
+  if (a < b)
+    return -1;
+  if (a > b)
+    return 1;
+  return 0;
+}
+
+__attribute__((unused)) static long long now_ns(void) {
+  struct timespec ts;
+  clock_gettime(CLOCK_MONO, &ts);
+  return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
+}
+
+__attribute__((unused)) static long long median(long long *v, long n) {
+  qsort(v, (size_t)n, sizeof *v, cmp_ll);
+  if (n % 2 == 1)
+    return v[n / 2];
+  return (v[n / 2 - 1] + v[n / 2]) / 2;
+}
+
+static void run_bench(int sync) {
+  (void)sync;
+}
+
+int main(int argc, char **argv) {
   if (!isatty(STDIN_FILENO)) {
     fprintf(stderr, "dre: stdin is not a terminal\n");
     exit(1);
   }
 
+  int bench = 0;
+  int sync = 0;
+
+  if (argc > 2) {
+    fprintf(stderr, "usage: dre [--bench|--bench=nosync]\n");
+    exit(2);
+  }
+
+  if (argc == 2) {
+    if (strcmp(argv[1], "--bench") == 0) {
+      bench = 1;
+      sync = 1;
+    } else if (strcmp(argv[1], "--bench=nosync") == 0) {
+      bench = 1;
+      sync = 0;
+    } else {
+      fprintf(stderr, "usage: dre [--bench|--bench=nosync]\n");
+      exit(2);
+    }
+  }
+
   atexit(restore);
   enter();
+
+  if (bench) {
+    run_bench(sync);
+    return 0;
+  }
 
   char byte;
   while (read(STDIN_FILENO, &byte, 1) == 1) {
