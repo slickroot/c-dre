@@ -16,9 +16,11 @@ struct band {
   struct text_buffer buf;
   int top_row;
   struct band *next;
+  struct band *prev;
 };
 
 static struct band *bands;
+static struct band *selected;
 
 static void enter(void) {
   tcgetattr(STDIN_FILENO, &saved_tty);
@@ -70,7 +72,11 @@ int main(void) {
         b->top_row = bands ? bands->top_row + 3 : 1;
         text_buffer_init(&b->buf, cols);
         b->next = bands;
+        b->prev = NULL;
+        if (bands)
+          bands->prev = b;
         bands = b;
+        selected = b;
         mode = MODE_TYPE;
         paint_label(&b->buf, cols, b->top_row);
       }
@@ -82,22 +88,31 @@ int main(void) {
     case EVENT_ENTER_TYPE:
       mode = MODE_TYPE;
       break;
+    case EVENT_SELECT_UP:
+      if (selected && selected->next)
+        selected = selected->next;
+      break;
+    case EVENT_SELECT_DOWN:
+      if (selected && selected->prev)
+        selected = selected->prev;
+      break;
     case EVENT_CHAR:
-      if (bands == NULL)
+      if (selected == NULL)
         continue;
-      changed = text_buffer_insert(&bands->buf, ev.ch);
+      changed = text_buffer_insert(&selected->buf, ev.ch);
       break;
     case EVENT_BACKSPACE:
-      if (bands == NULL)
+      if (selected == NULL)
         continue;
-      changed = text_buffer_backspace(&bands->buf);
+      changed = text_buffer_backspace(&selected->buf);
       break;
     case EVENT_NONE:
       break;
     }
 
-    if (changed)
-      paint_label(&bands->buf, cols, bands->top_row);
+    if (changed || ev.type == EVENT_SELECT_UP ||
+        ev.type == EVENT_SELECT_DOWN)
+      paint_label(&selected->buf, cols, selected->top_row);
   }
 
 done:
