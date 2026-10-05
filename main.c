@@ -6,6 +6,7 @@
 
 static struct termios saved_tty;
 static int cols;
+static int rows;
 static int n_A;
 static int n_a;
 
@@ -13,6 +14,7 @@ static void enter(void) {
   struct winsize ws;
   ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
   cols = ws.ws_col;
+  rows = ws.ws_row;
 
   tcgetattr(STDIN_FILENO, &saved_tty);
 
@@ -50,6 +52,22 @@ static void paint_at(int i) {
   write(STDOUT_FILENO, cup, len);
 }
 
+static void press(char key) {
+  if (key == 'a') {
+    paint_square(63, 63, 70);
+    n_a++;
+  }
+  if (key == 'A') {
+    paint_at(n_A);
+    paint_square(42, 42, 46);
+    if (n_a > 0) {
+      paint_at(n_A + n_a);
+      paint_square(63, 63, 70);
+    }
+    n_A++;
+  }
+}
+
 int main(void) {
   if (!isatty(STDIN_FILENO)) {
     fprintf(stderr, "dre: stdin is not a terminal\n");
@@ -63,19 +81,7 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
-    if (byte == 'a') {
-      paint_square(63, 63, 70);
-      n_a++;
-    }
-    if (byte == 'A') {
-      paint_at(n_A);
-      paint_square(42, 42, 46);
-      if (n_a > 0) {
-        paint_at(n_A + n_a);
-        paint_square(63, 63, 70);
-      }
-      n_A++;
-    }
+    press(byte);
   }
 
   return 0;
