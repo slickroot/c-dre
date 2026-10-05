@@ -75,8 +75,11 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
-    if (byte == 'a')
+    if (byte >= 0x20 && byte <= 0x7e) {
+      label[len++] = byte;
+      label[len] = 0;
       paint_label();
+    }
   }
 
   return 0;
