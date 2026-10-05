@@ -33,13 +33,15 @@
           version = "0.1.0";
           src = nixpkgs.lib.cleanSourceWith {
             src = ./.;
-            filter = path: type: baseNameOf (toString path) == "main.c";
+            filter = path: type:
+              let lib = nixpkgs.lib; name = baseNameOf (toString path); in
+              name == "main.c" || lib.hasSuffix ".c" name || lib.hasSuffix ".h" name;
           };
           strictDeps = true;
           dontConfigure = true;
           buildPhase = ''
             runHook preBuild
-            $CC -O2 -Wall -Wextra -o main main.c
+            $CC -O2 -Wall -Wextra -o main main.c text_buffer.c input.c paint.c
             runHook postBuild
           '';
           installPhase = ''
