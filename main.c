@@ -79,6 +79,7 @@ int main(void) {
     if (!band_drawn && byte == 'a') {
       band_drawn = 1;
       paint_label();
+      continue;
     }
     if (byte >= 0x20 && byte <= 0x7e) {
       label[len++] = byte;
