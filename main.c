@@ -40,14 +40,26 @@ static void restore(void) {
   fflush(stdout);
 }
 
-static void paint_band(void) {
-  static const char band[] = "\x1b[48;2;63;63;70m"
-                             "\x1b[1;1H"
-                             "\x1b[K\r\n"
-                             "\x1b[K\r\n"
-                             "\x1b[K"
-                             "\x1b[0m";
-  write(STDOUT_FILENO, band, sizeof band - 1);
+static void paint_label(void) {
+  if (cols == 0)
+    return;
+  if (len >= cols)
+    return;
+
+  static const char prefix[] = "\x1b[48;2;63;63;70m"
+                               "\x1b[38;2;201;201;207m"
+                               "\x1b[1;1H"
+                               "\x1b[K\r\n"
+                               "\x1b[K\r\n"
+                               "\x1b[K";
+
+  char cup[32];
+  int n = snprintf(cup, sizeof cup, "\x1b[2;%dH", (cols - len) / 2 + 1);
+
+  write(STDOUT_FILENO, prefix, sizeof prefix - 1);
+  write(STDOUT_FILENO, cup, n);
+  write(STDOUT_FILENO, label, len);
+  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
 }
 
 int main(void) {
@@ -64,7 +76,7 @@ int main(void) {
     if (byte == 0x03)
       break;
     if (byte == 'a')
-      paint_band();
+      paint_label();
   }
 
   return 0;
