@@ -14,7 +14,7 @@ static int cols;
 
 struct band {
   struct text_buffer buf;
-  int top_row;
+  int row;
   struct band *next;
   struct band *prev;
 };
@@ -70,7 +70,7 @@ int main(void) {
     case EVENT_ADD_BAND: {
       struct band *b = malloc(sizeof *b);
       if (b) {
-        b->top_row = bands ? bands->top_row + 3 : 1;
+        b->row = bands ? bands->row + 1 : 1;
         text_buffer_init(&b->buf, cols);
         b->next = bands;
         b->prev = NULL;
@@ -79,7 +79,7 @@ int main(void) {
         bands = b;
         selected = b;
         mode = MODE_TYPE;
-        paint_label(&b->buf, cols, b->top_row);
+        paint_label(&b->buf, cols, b->row);
       }
       break;
     }
@@ -113,7 +113,7 @@ int main(void) {
 
     if (changed || ev.type == EVENT_SELECT_UP ||
         ev.type == EVENT_SELECT_DOWN)
-      paint_label(&selected->buf, cols, selected->top_row);
+      paint_label(&selected->buf, cols, selected->row);
   }
 
 done:
