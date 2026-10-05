@@ -88,6 +88,16 @@ int main(void) {
       paint_label();
       continue;
     }
+    if (byte == 'D') {
+      if (cursor > 0)
+        cursor--;
+      paint_label();
+    }
+    if (byte == 'C') {
+      if (cursor < len)
+        cursor++;
+      paint_label();
+    }
     if (byte >= 0x20 && byte <= 0x7e && len < cols) {
       memmove(&label[cursor + 1], &label[cursor], len - cursor);
       label[cursor] = byte;
