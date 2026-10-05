@@ -100,15 +100,17 @@ int main(void) {
 
     if (seq) {
       seq = 0;
-      if (byte == 'D') {
+      switch (byte) {
+      case 'D':
         if (cursor > 0)
           cursor--;
         paint_label();
-      }
-      if (byte == 'C') {
+        break;
+      case 'C':
         if (cursor < len)
           cursor++;
         paint_label();
+        break;
       }
       continue;
     }
