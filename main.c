@@ -73,7 +73,6 @@ int main(void) {
       paint_at(n_A + n_a);
       paint_square(63, 63, 70);
       n_A++;
-      n_a++;
     }
   }
 
