@@ -9,6 +9,7 @@ static struct termios saved_tty;
 static int cols;
 static char *label;
 static int len;
+static int band_drawn;
 
 static void enter(void) {
   tcgetattr(STDIN_FILENO, &saved_tty);
@@ -75,6 +76,10 @@ int main(void) {
   while (read(STDIN_FILENO, &byte, 1) == 1) {
     if (byte == 0x03)
       break;
+    if (!band_drawn && byte == 'a') {
+      band_drawn = 1;
+      paint_label();
+    }
     if (byte >= 0x20 && byte <= 0x7e) {
       label[len++] = byte;
       label[len] = 0;
