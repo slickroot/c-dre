@@ -52,7 +52,8 @@ static void paint_label(void) {
                                "\x1b[1;1H"
                                "\x1b[K\r\n"
                                "\x1b[K\r\n"
-                               "\x1b[K";
+                               "\x1b[K"
+                               "\x1b[?25h";
 
   char cup[32];
   int n = snprintf(cup, sizeof cup, "\x1b[2;%dH", (cols - len) / 2 + 1);
