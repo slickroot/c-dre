@@ -112,6 +112,23 @@ static void test_k_and_j_are_char_in_type_mode(void) {
   assert(ev.ch == 'j');
 }
 
+static void test_delete_band_key(void) {
+  struct input_parser parser;
+  input_parser_init(&parser);
+
+  struct key_event ev = input_parse(&parser, 'd', MODE_MOVE);
+  assert(ev.type == EVENT_DELETE_BAND);
+}
+
+static void test_d_is_char_in_type_mode(void) {
+  struct input_parser parser;
+  input_parser_init(&parser);
+
+  struct key_event ev = input_parse(&parser, 'd', MODE_TYPE);
+  assert(ev.type == EVENT_CHAR);
+  assert(ev.ch == 'd');
+}
+
 static void test_move_mode_ignores_typing_keys(void) {
   struct input_parser parser;
   input_parser_init(&parser);
@@ -165,6 +182,8 @@ int main(void) {
   test_i_is_char_in_type_mode();
   test_k_and_j_in_move_mode();
   test_k_and_j_are_char_in_type_mode();
+  test_delete_band_key();
+  test_d_is_char_in_type_mode();
   test_move_mode_ignores_typing_keys();
   test_backspace_bytes();
   test_backspace_is_none_in_move_mode();

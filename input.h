@@ -10,7 +10,8 @@ enum key_event_type {
   EVENT_ESCAPE,
   EVENT_ENTER_TYPE,
   EVENT_SELECT_UP,
-  EVENT_SELECT_DOWN
+  EVENT_SELECT_DOWN,
+  EVENT_DELETE_BAND
 };
 
 enum app_mode {
