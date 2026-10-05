@@ -95,8 +95,10 @@ int main(void) {
         continue;
       }
       if (byte == 0x7f || byte == 0x08) {
-        if (len > 0) {
+        if (cursor > 0) {
+          memmove(&label[cursor - 1], &label[cursor], len - cursor);
           len--;
+          cursor--;
           label[len] = 0;
           paint_label();
         }
