@@ -84,13 +84,13 @@ static int cmp_ll(const void *l, const void *r) {
   return 0;
 }
 
-__attribute__((unused)) static long long now_ns(void) {
+static long long now_ns(void) {
   struct timespec ts;
   clock_gettime(CLOCK_MONO, &ts);
   return (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec;
 }
 
-__attribute__((unused)) static long long median(long long *v, long n) {
+static long long median(long long *v, long n) {
   qsort(v, (size_t)n, sizeof *v, cmp_ll);
   if (n % 2 == 1)
     return v[n / 2];
@@ -98,7 +98,40 @@ __attribute__((unused)) static long long median(long long *v, long n) {
 }
 
 static void run_bench(int sync) {
-  (void)sync;
+  int presses = (((rows - 1) * cols / 2 + 1) / 2) * 2;
+  int per_key = presses / 2;
+
+  long long *s_a = malloc((size_t)per_key * sizeof *s_a);
+  long long *s_A = malloc((size_t)per_key * sizeof *s_A);
+
+  for (int i = 0; i < per_key; i++) {
+    if (sync)
+      write(STDOUT_FILENO, "\x1b[?2026h", 8);
+    long long t_a = now_ns();
+    press('a');
+    if (sync)
+      write(STDOUT_FILENO, "\x1b[?2026l", 8);
+    s_a[i] = now_ns() - t_a;
+
+    if (sync)
+      write(STDOUT_FILENO, "\x1b[?2026h", 8);
+    long long t_A = now_ns();
+    press('A');
+    if (sync)
+      write(STDOUT_FILENO, "\x1b[?2026l", 8);
+    s_A[i] = now_ns() - t_A;
+  }
+
+  long long m_a = median(s_a, per_key) / 1000;
+  long long m_A = median(s_A, per_key) / 1000;
+
+  restore();
+
+  printf("a: %lld us (median of %d)\n", m_a, presses);
+  printf("A: %lld us (median of %d)\n", m_A, presses);
+  printf("mode: %s   TERM=%s\n",
+         sync ? "synchronized output (2026)" : "write-returns fallback (no 2026)",
+         getenv("TERM"));
 }
 
 int main(int argc, char **argv) {
