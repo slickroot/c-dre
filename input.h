@@ -6,7 +6,9 @@ enum key_event_type {
   EVENT_QUIT,
   EVENT_SUMMON_BAND,
   EVENT_CHAR,
-  EVENT_BACKSPACE
+  EVENT_BACKSPACE,
+  EVENT_ESCAPE,
+  EVENT_ENTER_TYPE
 };
 
 enum app_mode {
