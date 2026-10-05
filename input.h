@@ -8,7 +8,9 @@ enum key_event_type {
   EVENT_CHAR,
   EVENT_BACKSPACE,
   EVENT_ESCAPE,
-  EVENT_ENTER_TYPE
+  EVENT_ENTER_TYPE,
+  EVENT_SELECT_UP,
+  EVENT_SELECT_DOWN
 };
 
 enum app_mode {
