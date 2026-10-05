@@ -4,7 +4,7 @@
 enum key_event_type {
   EVENT_NONE = 0,
   EVENT_QUIT,
-  EVENT_SUMMON_BAND,
+  EVENT_ADD_BAND,
   EVENT_CHAR,
   EVENT_BACKSPACE,
   EVENT_ESCAPE,
@@ -26,6 +26,6 @@ struct input_parser {
 };
 
 void input_parser_init(struct input_parser *parser);
-struct key_event input_parse(struct input_parser *parser, char byte, enum app_mode mode, int band_drawn);
+struct key_event input_parse(struct input_parser *parser, char byte, enum app_mode mode);
 
 #endif
