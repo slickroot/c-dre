@@ -12,6 +12,14 @@ static struct termios saved_tty;
 
 static int cols;
 
+struct band {
+  struct text_buffer buf;
+  int top_row;
+  struct band *next;
+};
+
+static struct band *bands;
+
 static void enter(void) {
   tcgetattr(STDIN_FILENO, &saved_tty);
 
@@ -43,9 +51,6 @@ int main(void) {
   atexit(restore);
   enter();
 
-  struct text_buffer buf;
-  text_buffer_init(&buf, cols);
-
   struct input_parser parser;
   input_parser_init(&parser);
 
@@ -59,10 +64,18 @@ int main(void) {
     switch (ev.type) {
     case EVENT_QUIT:
       goto done;
-    case EVENT_ADD_BAND:
-      mode = MODE_TYPE;
-      paint_label(&buf, cols, 1);
+    case EVENT_ADD_BAND: {
+      struct band *b = malloc(sizeof *b);
+      if (b) {
+        b->top_row = bands ? bands->top_row + 3 : 1;
+        text_buffer_init(&b->buf, cols);
+        b->next = bands;
+        bands = b;
+        mode = MODE_TYPE;
+        paint_label(&b->buf, cols, b->top_row);
+      }
       break;
+    }
     case EVENT_ESCAPE:
       mode = MODE_MOVE;
       break;
@@ -70,21 +83,30 @@ int main(void) {
       mode = MODE_TYPE;
       break;
     case EVENT_CHAR:
-      changed = text_buffer_insert(&buf, ev.ch);
+      if (bands == NULL)
+        continue;
+      changed = text_buffer_insert(&bands->buf, ev.ch);
       break;
     case EVENT_BACKSPACE:
-      changed = text_buffer_backspace(&buf);
+      if (bands == NULL)
+        continue;
+      changed = text_buffer_backspace(&bands->buf);
       break;
     case EVENT_NONE:
       break;
     }
 
     if (changed)
-      paint_label(&buf, cols, 1);
+      paint_label(&bands->buf, cols, bands->top_row);
   }
 
 done:
-  text_buffer_free(&buf);
+  while (bands) {
+    struct band *next = bands->next;
+    text_buffer_free(&bands->buf);
+    free(bands);
+    bands = next;
+  }
 
   return 0;
 }
