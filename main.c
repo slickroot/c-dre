@@ -4,25 +4,14 @@
 #include <termios.h>
 #include <unistd.h>
 
+#include "editor.h"
 #include "input.h"
+#include "layout.h"
 #include "paint.h"
-#include "text_buffer.h"
 
 static struct termios saved_tty;
 
-static int cols;
-
-struct band {
-	struct text_buffer buf;
-	int row;
-	struct band *next;
-	struct band *prev;
-};
-
-static struct band *bands;
-static struct band *selected;
-
-static void enter(void)
+static void enter(int *cols, int *rows)
 {
 	tcgetattr(STDIN_FILENO, &saved_tty);
 
@@ -36,7 +25,8 @@ static void enter(void)
 
 	struct winsize ws;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
-	cols = ws.ws_col;
+	*cols = ws.ws_col;
+	*rows = ws.ws_row;
 }
 
 static void restore(void)
@@ -47,55 +37,6 @@ static void restore(void)
 	fflush(stdout);
 }
 
-static void insert_node(void)
-{
-	struct band *b = malloc(sizeof *b);
-	if (!b)
-		return;
-
-	b->row = bands ? bands->row + 1 : 1;
-	text_buffer_init(&b->buf, cols);
-	b->next = bands;
-	b->prev = NULL;
-	if (bands)
-		bands->prev = b;
-	bands = b;
-	selected = b;
-
-	paint_label(&b->buf, cols, b->row);
-}
-
-static void delete_node(struct band *node)
-{
-	if (!node)
-		return;
-
-	struct band *victim = node;
-	int old_row = victim->row;
-	struct band *heir = victim->next ? victim->next : victim->prev;
-
-	if (victim->prev)
-		victim->prev->next = victim->next;
-	if (victim->next)
-		victim->next->prev = victim->prev;
-	if (bands == victim)
-		bands = victim->next;
-
-	for (struct band *b = bands; b; b = b->next)
-		if (b->row > old_row)
-			b->row--;
-
-	text_buffer_free(&victim->buf);
-	free(victim);
-	selected = heir;
-
-	paint_delete_row(old_row);
-	if (selected)
-		paint_label(&selected->buf, cols, selected->row);
-	else
-		paint_hide_cursor();
-}
-
 int main(void)
 {
 	if (!isatty(STDIN_FILENO)) {
@@ -104,68 +45,29 @@ int main(void)
 	}
 
 	atexit(restore);
-	enter();
+
+	int cols, rows;
+	enter(&cols, &rows);
+
+	struct editor *e = editor_new(cols, rows);
+	if (!e)
+		exit(1);
 
 	struct input_parser parser;
 	input_parser_init(&parser);
 
-	enum app_mode mode = MODE_MOVE;
-
 	char byte;
 	while (read(STDIN_FILENO, &byte, 1) == 1) {
-		struct key_event ev = input_parse(&parser, byte, mode);
-		int changed = 0;
-
-		switch (ev.type) {
-		case EVENT_QUIT:
-			goto done;
-		case EVENT_ADD_BAND:
-			insert_node();
-			mode = MODE_TYPE;
+		struct key_event ev =
+			input_parse(&parser, byte, editor_mode(e));
+		if (ev.type == EVENT_QUIT)
 			break;
-		case EVENT_ESCAPE:
-			mode = MODE_MOVE;
-			break;
-		case EVENT_ENTER_TYPE:
-			mode = MODE_TYPE;
-			break;
-		case EVENT_SELECT_UP:
-			if (selected && selected->next)
-				selected = selected->next;
-			break;
-		case EVENT_SELECT_DOWN:
-			if (selected && selected->prev)
-				selected = selected->prev;
-			break;
-		case EVENT_CHAR:
-			if (selected == NULL)
-				continue;
-			changed = text_buffer_insert(&selected->buf, ev.ch);
-			break;
-		case EVENT_DELETE_BAND:
-			delete_node(selected);
-			break;
-		case EVENT_BACKSPACE:
-			if (selected == NULL)
-				continue;
-			changed = text_buffer_backspace(&selected->buf);
-			break;
-		case EVENT_NONE:
-			break;
-		}
-
-		if (changed || ev.type == EVENT_SELECT_UP ||
-		    ev.type == EVENT_SELECT_DOWN)
-			paint_label(&selected->buf, cols, selected->row);
+		editor_apply(e, ev);
+		struct layout l = layout(e);
+		paint_frame(&l);
 	}
 
-done:
-	while (bands) {
-		struct band *next = bands->next;
-		text_buffer_free(&bands->buf);
-		free(bands);
-		bands = next;
-	}
+	editor_free(e);
 
 	return 0;
 }
