@@ -45,11 +45,11 @@ static void restore(void) {
   fflush(stdout);
 }
 
-static void delete_selected(void) {
-  if (!selected)
+static void delete_node(struct band *node) {
+  if (!node)
     return;
 
-  struct band *victim = selected;
+  struct band *victim = node;
   int old_row = victim->row;
   struct band *heir = victim->next ? victim->next : victim->prev;
 
@@ -133,7 +133,7 @@ int main(void) {
       changed = text_buffer_insert(&selected->buf, ev.ch);
       break;
     case EVENT_DELETE_BAND:
-      delete_selected();
+      delete_node(selected);
       break;
     case EVENT_BACKSPACE:
       if (selected == NULL)
