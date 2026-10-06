@@ -1,8 +1,12 @@
 #ifndef NODE_H
 #define NODE_H
 
-#include "layout.h"
+#include "rect.h"
 #include "text_buffer.h"
+
+struct style {
+	int dim;
+};
 
 struct node_data {
 	struct text_buffer text;
@@ -12,6 +16,7 @@ struct node_data {
 
 struct node {
 	struct node_data data;
+	struct rect box; /* computed by layout(), not data */
 	struct node *parent;
 	struct node *first_child, *last_child;
 	struct node *prev, *next;

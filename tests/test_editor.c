@@ -3,6 +3,7 @@
 
 #include "editor.h"
 #include "grid.h"
+#include "layout.h"
 #include "paint.h"
 
 #define COLS 40
@@ -49,10 +50,13 @@ static struct editor *fresh(int cols, int rows)
 
 static struct grid *frame(struct editor *e)
 {
-	struct layout l = layout(e);
+	static struct display_list dl;
+
+	layout(editor_root(e), e_cols, e_rows);
+	display_list(e, &dl);
 	struct grid *g = grid_new(e_cols, e_rows);
 	assert(g);
-	paint_frame(&l, g);
+	paint_frame(&dl, g);
 	return g;
 }
 

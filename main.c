@@ -12,6 +12,7 @@
 #include "term.h"
 
 static struct termios saved_tty;
+static struct display_list dl;
 
 static void enter(int *cols, int *rows)
 {
@@ -64,8 +65,9 @@ int main(void)
 		if (ev.type == EVENT_QUIT)
 			break;
 		editor_apply(e, ev);
-		struct layout l = layout(e);
-		paint_frame(&l, g);
+		layout(editor_root(e), cols, rows);
+		display_list(e, &dl);
+		paint_frame(&dl, g);
 		term_flush(g);
 	}
 
