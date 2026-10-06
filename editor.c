@@ -118,6 +118,10 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_DELETE_BAND:
 		delete_node(e, e->selected);
 		break;
+	case EVENT_TOGGLE_DIM:
+		if (e->selected)
+			e->selected->style.dim = !e->selected->style.dim;
+		break;
 	case EVENT_QUIT:
 	case EVENT_NONE:
 		break;
