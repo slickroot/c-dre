@@ -20,6 +20,12 @@ static const char *fg_for(struct style s)
 		     : "\x1b[38;2;201;201;207m";
 }
 
+static const char *bg_for(struct style s)
+{
+	return s.highlight ? "\x1b[48;2;28;28;32m"  /* #1C1C20 */
+			   : "\x1b[48;2;10;10;11m"; /* #0A0A0B */
+}
+
 void paint_frame(const struct layout *l)
 {
 	write(STDOUT_FILENO, "\x1b[?2026h", sizeof "\x1b[?2026h" - 1);
@@ -27,6 +33,22 @@ void paint_frame(const struct layout *l)
 
 	for (int i = 0; i < l->count; i++) {
 		const struct placed_label *p = &l->labels[i];
+
+		const char *bg = bg_for(p->style);
+		write(STDOUT_FILENO, bg, strlen(bg));
+
+		if (p->style.highlight) {
+			for (int line = p->row - p->pad;
+			     line <= p->row + p->pad; line++) {
+				char edge[32];
+				int e = snprintf(edge, sizeof edge,
+						 "\x1b[%d;1H", line);
+
+				write(STDOUT_FILENO, edge, e);
+				write(STDOUT_FILENO, "\x1b[K",
+				      sizeof "\x1b[K" - 1);
+			}
+		}
 
 		char cup[32];
 		int n = snprintf(cup, sizeof cup, "\x1b[%d;%dH", p->row,
@@ -38,6 +60,11 @@ void paint_frame(const struct layout *l)
 		write(STDOUT_FILENO, fg, strlen(fg));
 		write(STDOUT_FILENO, p->text, p->len);
 	}
+
+	/* canvas must stay the active background so the next ESC[2J clears to
+	 * canvas instead of to the highlight colour */
+	write(STDOUT_FILENO, "\x1b[48;2;10;10;11m",
+	      sizeof "\x1b[48;2;10;10;11m" - 1);
 
 	if (l->caret_visible) {
 		char caret[32];

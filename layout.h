@@ -5,6 +5,7 @@
 
 struct style {
 	int dim;
+	int highlight;
 };
 
 struct placed_label {
@@ -12,6 +13,7 @@ struct placed_label {
 	int col;
 	const char *text;
 	int len;
+	int pad;
 	struct style style;
 };
 
