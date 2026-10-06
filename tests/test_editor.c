@@ -746,6 +746,128 @@ static void test_shrink_brings_clipped_band_back(void)
 	editor_free(e);
 }
 
+static void test_move_mode_highlights_selected_and_hides_caret(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.count == 3);
+	assert(l.labels[2].style.highlight == 1);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
+static void test_label_carries_its_own_pad(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_SELECT_UP);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_SELECT_UP);
+	apply(e, EVENT_GROW_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 3);
+	assert(l.labels[0].pad == 1);
+	assert(l.labels[1].pad == 2);
+	assert(l.labels[2].pad == 0);
+
+	editor_free(e);
+}
+
+static void test_only_selected_label_is_highlighted(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.labels[0].style.highlight == 0);
+	assert(l.labels[1].style.highlight == 0);
+	assert(l.labels[2].style.highlight == 1);
+
+	editor_free(e);
+}
+
+static void test_highlight_moves_with_selection(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_SELECT_UP);
+
+	struct layout l = layout(e);
+	assert(l.labels[2].style.highlight == 0);
+	assert(l.labels[1].style.highlight == 1);
+
+	apply(e, EVENT_SELECT_DOWN);
+	l = layout(e);
+	assert(l.labels[1].style.highlight == 0);
+	assert(l.labels[2].style.highlight == 1);
+
+	editor_free(e);
+}
+
+static void test_dim_selected_band_is_highlighted(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.labels[0].style.dim == 1);
+	assert(l.labels[0].style.highlight == 1);
+
+	editor_free(e);
+}
+
+static void test_empty_selected_band_is_highlighted(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.labels[0].len == 0);
+	assert(l.labels[0].style.highlight == 1);
+
+	editor_free(e);
+}
+
+static void test_type_mode_has_no_highlight_and_visible_caret(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "ab");
+
+	struct layout typed = layout(e);
+	assert(typed.count == 1);
+	assert(typed.labels[0].style.highlight == 0);
+	assert(typed.caret_visible == 1);
+	assert(typed.caret_row == 1);
+	assert(typed.caret_col == typed.labels[0].col + 2);
+
+	apply(e, EVENT_ESCAPE);
+	struct layout moved = layout(e);
+	assert(moved.labels[0].style.highlight == 1);
+	assert(moved.caret_visible == 0);
+
+	apply(e, EVENT_ENTER_TYPE);
+	struct layout retyped = layout(e);
+	assert(retyped.labels[0].style.highlight == 0);
+	assert(retyped.caret_visible == 1);
+	assert(retyped.caret_row == typed.caret_row);
+	assert(retyped.caret_col == typed.caret_col);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -792,5 +914,12 @@ int main(void)
 	test_shrink_with_no_bands_is_noop();
 	test_shrink_does_not_change_mode();
 	test_shrink_brings_clipped_band_back();
+	test_move_mode_highlights_selected_and_hides_caret();
+	test_label_carries_its_own_pad();
+	test_only_selected_label_is_highlighted();
+	test_highlight_moves_with_selection();
+	test_dim_selected_band_is_highlighted();
+	test_empty_selected_band_is_highlighted();
+	test_type_mode_has_no_highlight_and_visible_caret();
 	return 0;
 }

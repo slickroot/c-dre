@@ -166,10 +166,13 @@ struct layout layout(const struct editor *e)
 		p->col = (e->cols - oldest->buf.len) / 2 + 1;
 		p->text = oldest->buf.data;
 		p->len = oldest->buf.len;
+		p->pad = oldest->pad;
 		p->style = oldest->style;
+		p->style.highlight =
+			oldest == e->selected && e->mode == MODE_MOVE;
 		l.count++;
 
-		if (oldest == e->selected) {
+		if (oldest == e->selected && e->mode == MODE_TYPE) {
 			l.caret_visible = 1;
 			l.caret_row = row;
 			l.caret_col = (e->cols - oldest->buf.len) / 2 +
