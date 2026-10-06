@@ -65,6 +65,17 @@ static void test_add_band(void)
 	editor_free(e);
 }
 
+static void test_new_band_label_is_normal(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+
+	struct layout l = layout(e);
+	assert(l.labels[0].style.dim == 0);
+
+	editor_free(e);
+}
+
 static void test_type_text(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
@@ -340,10 +351,94 @@ static void test_capacity_is_cols_minus_one(void)
 	editor_free(e);
 }
 
+static void test_toggle_makes_band_dim_then_normal(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct layout l = layout(e);
+	assert(l.labels[0].style.dim == 1);
+
+	apply(e, EVENT_TOGGLE_DIM);
+	l = layout(e);
+	assert(l.labels[0].style.dim == 0);
+
+	editor_free(e);
+}
+
+static void test_toggle_only_changes_highlighted_band(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct layout l = layout(e);
+	assert(l.labels[2].style.dim == 1);
+	assert(l.labels[0].style.dim == 0);
+	assert(l.labels[1].style.dim == 0);
+
+	editor_free(e);
+}
+
+static void test_add_band_after_dim_is_normal_and_old_stays_dim(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 2);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_ADD_BAND);
+
+	struct layout l = layout(e);
+	assert(l.labels[2].style.dim == 0);
+	assert(l.labels[1].style.dim == 1);
+
+	editor_free(e);
+}
+
+static void test_typing_into_dim_band_keeps_dim(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	type(e, "ab");
+	apply(e, EVENT_TOGGLE_DIM);
+	type(e, "cd");
+
+	struct layout l = layout(e);
+	assert(l.labels[0].style.dim == 1);
+	assert(l.labels[0].len == 4);
+	assert(strcmp(l.labels[0].text, "abcd") == 0);
+
+	editor_free(e);
+}
+
+static void test_toggle_with_no_bands_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct layout l = layout(e);
+	assert(l.count == 0);
+
+	editor_free(e);
+}
+
+static void test_toggle_does_not_change_mode(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	apply(e, EVENT_TOGGLE_DIM);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
 	test_add_band();
+	test_new_band_label_is_normal();
 	test_type_text();
 	test_backspace();
 	test_backspace_on_empty_is_noop();
@@ -362,5 +457,11 @@ int main(void)
 	test_quit_and_none_are_noops();
 	test_clips_to_screen_rows();
 	test_capacity_is_cols_minus_one();
+	test_toggle_makes_band_dim_then_normal();
+	test_toggle_only_changes_highlighted_band();
+	test_add_band_after_dim_is_normal_and_old_stays_dim();
+	test_typing_into_dim_band_keeps_dim();
+	test_toggle_with_no_bands_is_noop();
+	test_toggle_does_not_change_mode();
 	return 0;
 }

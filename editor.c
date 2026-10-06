@@ -5,6 +5,7 @@
 
 struct band {
 	struct text_buffer buf;
+	struct style style;
 	struct band *next;
 	struct band *prev;
 };
@@ -23,6 +24,7 @@ static void insert_node(struct editor *e)
 	if (!b)
 		return;
 
+	b->style = (struct style){0};
 	text_buffer_init(&b->buf, e->cols - 1);
 	b->next = e->bands;
 	b->prev = NULL;
@@ -116,6 +118,10 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_DELETE_BAND:
 		delete_node(e, e->selected);
 		break;
+	case EVENT_TOGGLE_DIM:
+		if (e->selected)
+			e->selected->style.dim = !e->selected->style.dim;
+		break;
 	case EVENT_QUIT:
 	case EVENT_NONE:
 		break;
@@ -148,6 +154,7 @@ struct layout layout(const struct editor *e)
 		p->col = (e->cols - oldest->buf.len) / 2 + 1;
 		p->text = oldest->buf.data;
 		p->len = oldest->buf.len;
+		p->style = oldest->style;
 		l.count++;
 
 		if (oldest == e->selected) {

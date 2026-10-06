@@ -21,6 +21,9 @@ struct key_event input_parse(char byte, enum app_mode mode)
 		if (byte == 'd')
 			return (struct key_event){EVENT_DELETE_BAND, 0};
 
+		if (byte == '-')
+			return (struct key_event){EVENT_TOGGLE_DIM, 0};
+
 		return (struct key_event){EVENT_NONE, 0};
 	}
 
