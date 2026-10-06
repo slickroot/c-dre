@@ -2,10 +2,10 @@
 #define TEXT_BUFFER_H
 
 struct text_buffer {
-  char *data;
-  int len;
-  int cap;
-  int cursor;
+	char *data;
+	int len;
+	int cap;
+	int cursor;
 };
 
 void text_buffer_init(struct text_buffer *buf, int cap);

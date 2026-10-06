@@ -13,154 +13,159 @@ static struct termios saved_tty;
 static int cols;
 
 struct band {
-  struct text_buffer buf;
-  int row;
-  struct band *next;
-  struct band *prev;
+	struct text_buffer buf;
+	int row;
+	struct band *next;
+	struct band *prev;
 };
 
 static struct band *bands;
 static struct band *selected;
 
-static void enter(void) {
-  tcgetattr(STDIN_FILENO, &saved_tty);
+static void enter(void)
+{
+	tcgetattr(STDIN_FILENO, &saved_tty);
 
-  struct termios raw = saved_tty;
-  cfmakeraw(&raw);
-  raw.c_cc[VMIN] = 1;
-  raw.c_cc[VTIME] = 0;
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
+	struct termios raw = saved_tty;
+	cfmakeraw(&raw);
+	raw.c_cc[VMIN] = 1;
+	raw.c_cc[VTIME] = 0;
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
-  paint_wallpaper();
+	paint_wallpaper();
 
-  struct winsize ws;
-  ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
-  cols = ws.ws_col;
+	struct winsize ws;
+	ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
+	cols = ws.ws_col;
 }
 
-static void restore(void) {
-  write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
-  write(STDOUT_FILENO, "\x1b[?1049l", sizeof "\x1b[?1049l" - 1);
-  tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_tty);
-  fflush(stdout);
+static void restore(void)
+{
+	write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
+	write(STDOUT_FILENO, "\x1b[?1049l", sizeof "\x1b[?1049l" - 1);
+	tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_tty);
+	fflush(stdout);
 }
 
-static void insert_node(void) {
-  struct band *b = malloc(sizeof *b);
-  if (!b)
-    return;
+static void insert_node(void)
+{
+	struct band *b = malloc(sizeof *b);
+	if (!b)
+		return;
 
-  b->row = bands ? bands->row + 1 : 1;
-  text_buffer_init(&b->buf, cols);
-  b->next = bands;
-  b->prev = NULL;
-  if (bands)
-    bands->prev = b;
-  bands = b;
-  selected = b;
+	b->row = bands ? bands->row + 1 : 1;
+	text_buffer_init(&b->buf, cols);
+	b->next = bands;
+	b->prev = NULL;
+	if (bands)
+		bands->prev = b;
+	bands = b;
+	selected = b;
 
-  paint_label(&b->buf, cols, b->row);
+	paint_label(&b->buf, cols, b->row);
 }
 
-static void delete_node(struct band *node) {
-  if (!node)
-    return;
+static void delete_node(struct band *node)
+{
+	if (!node)
+		return;
 
-  struct band *victim = node;
-  int old_row = victim->row;
-  struct band *heir = victim->next ? victim->next : victim->prev;
+	struct band *victim = node;
+	int old_row = victim->row;
+	struct band *heir = victim->next ? victim->next : victim->prev;
 
-  if (victim->prev)
-    victim->prev->next = victim->next;
-  if (victim->next)
-    victim->next->prev = victim->prev;
-  if (bands == victim)
-    bands = victim->next;
+	if (victim->prev)
+		victim->prev->next = victim->next;
+	if (victim->next)
+		victim->next->prev = victim->prev;
+	if (bands == victim)
+		bands = victim->next;
 
-  for (struct band *b = bands; b; b = b->next)
-    if (b->row > old_row)
-      b->row--;
+	for (struct band *b = bands; b; b = b->next)
+		if (b->row > old_row)
+			b->row--;
 
-  text_buffer_free(&victim->buf);
-  free(victim);
-  selected = heir;
+	text_buffer_free(&victim->buf);
+	free(victim);
+	selected = heir;
 
-  paint_delete_row(old_row);
-  if (selected)
-    paint_label(&selected->buf, cols, selected->row);
-  else
-    paint_hide_cursor();
+	paint_delete_row(old_row);
+	if (selected)
+		paint_label(&selected->buf, cols, selected->row);
+	else
+		paint_hide_cursor();
 }
 
-int main(void) {
-  if (!isatty(STDIN_FILENO)) {
-    fprintf(stderr, "dre: stdin is not a terminal\n");
-    exit(1);
-  }
+int main(void)
+{
+	if (!isatty(STDIN_FILENO)) {
+		fprintf(stderr, "dre: stdin is not a terminal\n");
+		exit(1);
+	}
 
-  atexit(restore);
-  enter();
+	atexit(restore);
+	enter();
 
-  struct input_parser parser;
-  input_parser_init(&parser);
+	struct input_parser parser;
+	input_parser_init(&parser);
 
-  enum app_mode mode = MODE_MOVE;
+	enum app_mode mode = MODE_MOVE;
 
-  char byte;
-  while (read(STDIN_FILENO, &byte, 1) == 1) {
-    struct key_event ev = input_parse(&parser, byte, mode);
-    int changed = 0;
+	char byte;
+	while (read(STDIN_FILENO, &byte, 1) == 1) {
+		struct key_event ev = input_parse(&parser, byte, mode);
+		int changed = 0;
 
-    switch (ev.type) {
-    case EVENT_QUIT:
-      goto done;
-    case EVENT_ADD_BAND:
-      insert_node();
-      mode = MODE_TYPE;
-      break;
-    case EVENT_ESCAPE:
-      mode = MODE_MOVE;
-      break;
-    case EVENT_ENTER_TYPE:
-      mode = MODE_TYPE;
-      break;
-    case EVENT_SELECT_UP:
-      if (selected && selected->next)
-        selected = selected->next;
-      break;
-    case EVENT_SELECT_DOWN:
-      if (selected && selected->prev)
-        selected = selected->prev;
-      break;
-    case EVENT_CHAR:
-      if (selected == NULL)
-        continue;
-      changed = text_buffer_insert(&selected->buf, ev.ch);
-      break;
-    case EVENT_DELETE_BAND:
-      delete_node(selected);
-      break;
-    case EVENT_BACKSPACE:
-      if (selected == NULL)
-        continue;
-      changed = text_buffer_backspace(&selected->buf);
-      break;
-    case EVENT_NONE:
-      break;
-    }
+		switch (ev.type) {
+		case EVENT_QUIT:
+			goto done;
+		case EVENT_ADD_BAND:
+			insert_node();
+			mode = MODE_TYPE;
+			break;
+		case EVENT_ESCAPE:
+			mode = MODE_MOVE;
+			break;
+		case EVENT_ENTER_TYPE:
+			mode = MODE_TYPE;
+			break;
+		case EVENT_SELECT_UP:
+			if (selected && selected->next)
+				selected = selected->next;
+			break;
+		case EVENT_SELECT_DOWN:
+			if (selected && selected->prev)
+				selected = selected->prev;
+			break;
+		case EVENT_CHAR:
+			if (selected == NULL)
+				continue;
+			changed = text_buffer_insert(&selected->buf, ev.ch);
+			break;
+		case EVENT_DELETE_BAND:
+			delete_node(selected);
+			break;
+		case EVENT_BACKSPACE:
+			if (selected == NULL)
+				continue;
+			changed = text_buffer_backspace(&selected->buf);
+			break;
+		case EVENT_NONE:
+			break;
+		}
 
-    if (changed || ev.type == EVENT_SELECT_UP ||
-        ev.type == EVENT_SELECT_DOWN)
-      paint_label(&selected->buf, cols, selected->row);
-  }
+		if (changed || ev.type == EVENT_SELECT_UP ||
+		    ev.type == EVENT_SELECT_DOWN)
+			paint_label(&selected->buf, cols, selected->row);
+	}
 
 done:
-  while (bands) {
-    struct band *next = bands->next;
-    text_buffer_free(&bands->buf);
-    free(bands);
-    bands = next;
-  }
+	while (bands) {
+		struct band *next = bands->next;
+		text_buffer_free(&bands->buf);
+		free(bands);
+		bands = next;
+	}
 
-  return 0;
+	return 0;
 }

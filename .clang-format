@@ -1,0 +1,15 @@
+BasedOnStyle: None
+DisableFormat: false
+UseTab: Always
+IndentWidth: 8
+TabWidth: 8
+ContinuationIndentWidth: 8
+ColumnLimit: 80
+IndentCaseLabels: false
+BreakBeforeBraces: Linux
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortFunctionsOnASingleLine: None
+SortIncludes: Never
+PointerAlignment: Right
+SpaceBeforeParens: ControlStatements
+AlignAfterOpenBracket: Align
