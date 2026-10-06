@@ -31,4 +31,12 @@ $(BUILD_DIR)/test_input: tests/test_input.c input.c input.h
 clean:
 	rm -rf $(BUILD_DIR) dre
 
-.PHONY: all test clean
+FORMAT_FILES = $(wildcard *.c *.h tests/*.c tests/*.h)
+
+format:
+	clang-format -i $(FORMAT_FILES)
+
+lint:
+	clang-format --dry-run --Werror $(FORMAT_FILES)
+
+.PHONY: all test clean format lint

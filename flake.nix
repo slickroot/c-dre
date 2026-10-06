@@ -22,6 +22,7 @@
           packages = [
             pkgs.stdenv.cc
             pkgs.gdb
+            pkgs.clang-tools
           ]
           ++ nixpkgs.lib.optionals pkgs.stdenv.hostPlatform.isLinux [ pkgs.strace ];
         };
