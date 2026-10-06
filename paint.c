@@ -32,7 +32,7 @@ void paint_frame(const struct layout *l)
 	write(STDOUT_FILENO, "\x1b[2J", sizeof "\x1b[2J" - 1);
 
 	for (int i = 0; i < l->count; i++) {
-		const struct placed_label *p = &l->labels[i];
+		const struct placed_band *p = &l->bands[i];
 
 		const char *bg = bg_for(p->style);
 		write(STDOUT_FILENO, bg, strlen(bg));
@@ -50,15 +50,17 @@ void paint_frame(const struct layout *l)
 			}
 		}
 
-		char cup[32];
-		int n = snprintf(cup, sizeof cup, "\x1b[%d;%dH", p->row,
-				 p->col);
-
-		write(STDOUT_FILENO, cup, n);
-
 		const char *fg = fg_for(p->style);
 		write(STDOUT_FILENO, fg, strlen(fg));
-		write(STDOUT_FILENO, p->text, p->len);
+
+		for (int t = 0; t < p->count; t++) {
+			char cup[32];
+			int n = snprintf(cup, sizeof cup, "\x1b[%d;%dH", p->row,
+					 p->texts[t].col);
+
+			write(STDOUT_FILENO, cup, n);
+			write(STDOUT_FILENO, p->texts[t].text, p->texts[t].len);
+		}
 	}
 
 	/* canvas must stay the active background so the next ESC[2J clears to
