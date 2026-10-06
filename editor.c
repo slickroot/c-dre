@@ -158,13 +158,21 @@ void editor_apply(struct editor *e, struct key_event ev)
 	}
 }
 
-static int text_col(int cols, int len, int index, int count)
+static void place_text(struct placed_text *out, int row, int pad, int cols,
+		       int len, int index, int count)
 {
-	if (count == 1)
-		return (cols - len) / 2 + 1;
-	if (index == 0)
-		return 3;
-	return cols - len - 1;
+	if (count == 1) {
+		out->row = row;
+		out->col = (cols - len) / 2 + 1;
+		return;
+	}
+	if (pad >= 1) {
+		out->row = index == 0 ? row - 1 : row + 1;
+		out->col = (cols - len) / 2 + 1;
+		return;
+	}
+	out->row = row;
+	out->col = index == 0 ? 3 : cols - len - 1;
 }
 
 struct layout layout(const struct editor *e)
@@ -199,8 +207,8 @@ struct layout layout(const struct editor *e)
 		p->count = oldest->count;
 		for (int i = 0; i < oldest->count; i++) {
 			struct text_buffer *t = &oldest->texts[i];
-			p->texts[i].col =
-				text_col(e->cols, t->len, i, oldest->count);
+			place_text(&p->texts[i], row, oldest->pad, e->cols,
+				   t->len, i, oldest->count);
 			p->texts[i].text = t->data;
 			p->texts[i].len = t->len;
 		}
@@ -208,7 +216,7 @@ struct layout layout(const struct editor *e)
 
 		if (oldest == e->selected && e->mode == MODE_TYPE) {
 			l.caret_visible = 1;
-			l.caret_row = row;
+			l.caret_row = p->texts[oldest->count - 1].row;
 			l.caret_col = p->texts[oldest->count - 1].col +
 				      active_text(oldest)->cursor;
 		}
