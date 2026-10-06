@@ -434,6 +434,163 @@ static void test_toggle_does_not_change_mode(void)
 	editor_free(e);
 }
 
+static void test_grow_band_centres_label(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_GROW_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 2);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == 2);
+
+	apply(e, EVENT_GROW_BAND);
+	l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 3);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == 3);
+
+	editor_free(e);
+}
+
+static void test_grow_middle_band_pushes_band_below(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_SELECT_UP);
+	apply(e, EVENT_GROW_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 3);
+	assert(l.labels[0].row == 1);
+	assert(l.labels[1].row == 3);
+	assert(l.labels[2].row == 5);
+
+	apply(e, EVENT_GROW_BAND);
+	l = layout(e);
+	assert(l.count == 3);
+	assert(l.labels[0].row == 1);
+	assert(l.labels[1].row == 4);
+	assert(l.labels[2].row == 7);
+
+	editor_free(e);
+}
+
+static void test_grow_band_has_no_limit(void)
+{
+	struct editor *e = fresh(COLS, 40);
+	add_bands(e, 1);
+	for (int i = 0; i < 10; i++)
+		apply(e, EVENT_GROW_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 11);
+	assert(l.caret_row == 11);
+
+	editor_free(e);
+}
+
+static void test_add_band_after_grow_is_one_line(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ADD_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 2);
+	assert(l.labels[0].row == 2);
+	assert(l.labels[1].row == 4);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == 4);
+
+	editor_free(e);
+}
+
+static void test_typing_into_grown_band_keeps_caret_middle(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	type(e, "ab");
+	apply(e, EVENT_GROW_BAND);
+	type(e, "c");
+
+	struct layout l = layout(e);
+	assert(l.labels[0].len == 3);
+	assert(strcmp(l.labels[0].text, "abc") == 0);
+	assert(l.labels[0].row == 2);
+	assert(l.caret_row == 2);
+	assert(l.caret_col == l.labels[0].col + 3);
+
+	apply(e, EVENT_BACKSPACE);
+	l = layout(e);
+	assert(l.labels[0].len == 2);
+	assert(strcmp(l.labels[0].text, "ab") == 0);
+	assert(l.caret_row == 2);
+	assert(l.caret_col == l.labels[0].col + 2);
+
+	editor_free(e);
+}
+
+static void test_grow_with_no_bands_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_GROW_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 0);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
+static void test_grow_does_not_change_mode(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_ESCAPE);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	apply(e, EVENT_GROW_BAND);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	editor_free(e);
+}
+
+static void test_grow_clips_band_below_bottom(void)
+{
+	struct editor *e = fresh(COLS, 4);
+	add_bands(e, 1);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ADD_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 3);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
+static void test_grow_clips_band_with_only_padding_visible(void)
+{
+	struct editor *e = fresh(COLS, 4);
+	add_bands(e, 1);
+	for (int i = 0; i < 4; i++)
+		apply(e, EVENT_GROW_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 0);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -463,5 +620,14 @@ int main(void)
 	test_typing_into_dim_band_keeps_dim();
 	test_toggle_with_no_bands_is_noop();
 	test_toggle_does_not_change_mode();
+	test_grow_band_centres_label();
+	test_grow_middle_band_pushes_band_below();
+	test_grow_band_has_no_limit();
+	test_add_band_after_grow_is_one_line();
+	test_typing_into_grown_band_keeps_caret_middle();
+	test_grow_with_no_bands_is_noop();
+	test_grow_does_not_change_mode();
+	test_grow_clips_band_below_bottom();
+	test_grow_clips_band_with_only_padding_visible();
 	return 0;
 }
