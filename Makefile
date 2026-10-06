@@ -5,7 +5,7 @@ CPPFLAGS = -I.
 BUILD_DIR = build
 SRCS = main.c editor.c text_buffer.c input.c paint.c
 OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
-TEST_BINS = $(BUILD_DIR)/test_text_buffer $(BUILD_DIR)/test_input $(BUILD_DIR)/test_editor
+TEST_BINS = $(BUILD_DIR)/test_text_buffer $(BUILD_DIR)/test_input $(BUILD_DIR)/test_editor $(BUILD_DIR)/test_grid
 
 all: dre
 
@@ -20,6 +20,7 @@ test: $(TEST_BINS)
 	$(BUILD_DIR)/test_text_buffer
 	$(BUILD_DIR)/test_input
 	$(BUILD_DIR)/test_editor
+	$(BUILD_DIR)/test_grid
 
 $(BUILD_DIR)/test_text_buffer: tests/test_text_buffer.c text_buffer.c text_buffer.h
 	@mkdir -p $(BUILD_DIR)
@@ -32,6 +33,10 @@ $(BUILD_DIR)/test_input: tests/test_input.c input.c input.h
 $(BUILD_DIR)/test_editor: tests/test_editor.c editor.c editor.h layout.h text_buffer.c text_buffer.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_editor.c editor.c text_buffer.c
+
+$(BUILD_DIR)/test_grid: tests/test_grid.c grid.c grid.h
+	@mkdir -p $(BUILD_DIR)
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_grid.c grid.c
 
 clean:
 	rm -rf $(BUILD_DIR) dre
