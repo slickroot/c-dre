@@ -23,6 +23,9 @@ struct key_event input_parse(struct input_parser *parser, char byte, enum app_mo
     if (byte == 'j')
       return (struct key_event){ EVENT_SELECT_DOWN, 0 };
 
+    if (byte == 'd')
+      return (struct key_event){ EVENT_DELETE_BAND, 0 };
+
     return (struct key_event){ EVENT_NONE, 0 };
   }
 
