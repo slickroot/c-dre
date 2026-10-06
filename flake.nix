@@ -42,7 +42,7 @@
           dontConfigure = true;
           buildPhase = ''
             runHook preBuild
-            $CC -O2 -Wall -Wextra -o main main.c text_buffer.c input.c paint.c
+            $CC -O2 -Wall -Wextra -o main main.c editor.c text_buffer.c input.c paint.c
             runHook postBuild
           '';
           installPhase = ''
