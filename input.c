@@ -27,6 +27,9 @@ struct key_event input_parse(char byte, enum app_mode mode)
 		if (byte == ']')
 			return (struct key_event){EVENT_GROW_BAND, 0};
 
+		if (byte == '[')
+			return (struct key_event){EVENT_SHRINK_BAND, 0};
+
 		return (struct key_event){EVENT_NONE, 0};
 	}
 
