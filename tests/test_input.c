@@ -118,6 +118,19 @@ static void test_dash_is_char_in_type_mode(void)
 	assert(ev.ch == '-');
 }
 
+static void test_grow_band_key(void)
+{
+	struct key_event ev = input_parse(']', MODE_MOVE);
+	assert(ev.type == EVENT_GROW_BAND);
+}
+
+static void test_bracket_is_char_in_type_mode(void)
+{
+	struct key_event ev = input_parse(']', MODE_TYPE);
+	assert(ev.type == EVENT_CHAR);
+	assert(ev.ch == ']');
+}
+
 static void test_move_mode_ignores_typing_keys(void)
 {
 	struct key_event ev = input_parse('x', MODE_MOVE);
@@ -170,6 +183,8 @@ int main(void)
 	test_d_is_char_in_type_mode();
 	test_toggle_dim_key();
 	test_dash_is_char_in_type_mode();
+	test_grow_band_key();
+	test_bracket_is_char_in_type_mode();
 	test_move_mode_ignores_typing_keys();
 	test_backspace_bytes();
 	test_backspace_is_none_in_move_mode();
