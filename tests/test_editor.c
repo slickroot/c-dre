@@ -65,6 +65,17 @@ static void test_add_band(void)
 	editor_free(e);
 }
 
+static void test_new_band_label_is_normal(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+
+	struct layout l = layout(e);
+	assert(l.labels[0].style.dim == 0);
+
+	editor_free(e);
+}
+
 static void test_type_text(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
@@ -344,6 +355,7 @@ int main(void)
 {
 	test_new_editor_is_empty();
 	test_add_band();
+	test_new_band_label_is_normal();
 	test_type_text();
 	test_backspace();
 	test_backspace_on_empty_is_noop();

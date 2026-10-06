@@ -3,11 +3,16 @@
 
 #define LAYOUT_MAX_LABELS 256
 
+struct style {
+	int dim;
+};
+
 struct placed_label {
 	int row;
 	int col;
 	const char *text;
 	int len;
+	struct style style;
 };
 
 struct layout {

@@ -5,6 +5,7 @@
 
 struct band {
 	struct text_buffer buf;
+	struct style style;
 	struct band *next;
 	struct band *prev;
 };
@@ -23,6 +24,7 @@ static void insert_node(struct editor *e)
 	if (!b)
 		return;
 
+	b->style = (struct style){0};
 	text_buffer_init(&b->buf, e->cols - 1);
 	b->next = e->bands;
 	b->prev = NULL;
@@ -148,6 +150,7 @@ struct layout layout(const struct editor *e)
 		p->col = (e->cols - oldest->buf.len) / 2 + 1;
 		p->text = oldest->buf.data;
 		p->len = oldest->buf.len;
+		p->style = oldest->style;
 		l.count++;
 
 		if (oldest == e->selected) {
