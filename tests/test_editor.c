@@ -65,7 +65,7 @@ static void test_add_band(void)
 	editor_free(e);
 }
 
-static void test_new_band_label_is_normal(void)
+static void test_new_band_text_is_normal(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_ADD_BAND);
@@ -434,7 +434,7 @@ static void test_toggle_does_not_change_mode(void)
 	editor_free(e);
 }
 
-static void test_grow_band_centres_label(void)
+static void test_grow_band_centres_text(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
@@ -591,7 +591,7 @@ static void test_grow_clips_band_with_only_padding_visible(void)
 	editor_free(e);
 }
 
-static void test_shrink_band_centres_label_again(void)
+static void test_shrink_band_centres_text_again(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
@@ -761,7 +761,7 @@ static void test_move_mode_highlights_selected_and_hides_caret(void)
 	editor_free(e);
 }
 
-static void test_label_carries_its_own_pad(void)
+static void test_band_carries_its_own_pad(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
@@ -781,7 +781,7 @@ static void test_label_carries_its_own_pad(void)
 	editor_free(e);
 }
 
-static void test_only_selected_label_is_highlighted(void)
+static void test_only_selected_band_is_highlighted(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
@@ -869,11 +869,150 @@ static void test_type_mode_has_no_highlight_and_visible_caret(void)
 	editor_free(e);
 }
 
+static void test_add_text_moves_old_text_left_and_types_on_the_right(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].count == 2);
+	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
+	assert(l.bands[0].texts[0].col == 3);
+	assert(l.bands[0].texts[1].len == 0);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == 1);
+	assert(l.caret_col == l.bands[0].texts[1].col);
+	assert(l.bands[0].style.highlight == 0);
+
+	editor_free(e);
+}
+
+static void test_typed_text_on_the_right_is_right_aligned(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+
+	struct layout l = layout(e);
+	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
+	assert(l.caret_col == l.bands[0].texts[1].col + 6);
+
+	editor_free(e);
+}
+
+static void test_add_text_on_a_band_with_two_texts_is_a_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+
+	assert(editor_mode(e) == MODE_MOVE);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].count == 2);
+	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
+	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].style.highlight == 1);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
+static void test_add_text_with_no_bands_is_a_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_TEXT);
+
+	assert(editor_mode(e) == MODE_MOVE);
+
+	struct layout l = layout(e);
+	assert(l.count == 0);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
+static void test_add_text_on_an_empty_text(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].count == 2);
+	assert(l.bands[0].texts[0].len == 0);
+	assert(l.bands[0].texts[0].col == 3);
+	assert(l.bands[0].texts[1].len == 0);
+	assert(l.caret_visible == 1);
+	assert(l.caret_col == l.bands[0].texts[1].col);
+
+	type(e, "Logout");
+	l = layout(e);
+	assert(l.bands[0].texts[0].len == 0);
+	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+
+	editor_free(e);
+}
+
+static void test_escape_right_after_add_text_keeps_empty_right_text(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].count == 2);
+	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
+	assert(l.bands[0].texts[0].col == 3);
+	assert(l.bands[0].texts[1].len == 0);
+	assert(l.caret_visible == 0);
+	assert(l.bands[0].style.highlight == 1);
+
+	editor_free(e);
+}
+
+static void test_enter_type_on_two_texts_types_into_the_right_one(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Lo");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ENTER_TYPE);
+	type(e, "gout");
+
+	struct layout l = layout(e);
+	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
+	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.caret_visible == 1);
+	assert(l.caret_col == l.bands[0].texts[1].col + 6);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
 	test_add_band();
-	test_new_band_label_is_normal();
+	test_new_band_text_is_normal();
 	test_type_text();
 	test_backspace();
 	test_backspace_on_empty_is_noop();
@@ -898,7 +1037,7 @@ int main(void)
 	test_typing_into_dim_band_keeps_dim();
 	test_toggle_with_no_bands_is_noop();
 	test_toggle_does_not_change_mode();
-	test_grow_band_centres_label();
+	test_grow_band_centres_text();
 	test_grow_middle_band_pushes_band_below();
 	test_grow_band_has_no_limit();
 	test_add_band_after_grow_is_one_line();
@@ -907,7 +1046,7 @@ int main(void)
 	test_grow_does_not_change_mode();
 	test_grow_clips_band_below_bottom();
 	test_grow_clips_band_with_only_padding_visible();
-	test_shrink_band_centres_label_again();
+	test_shrink_band_centres_text_again();
 	test_shrink_one_line_band_stays_one_line();
 	test_shrink_middle_band_pulls_band_below_up();
 	test_grow_then_shrink_restores_layout();
@@ -916,11 +1055,18 @@ int main(void)
 	test_shrink_does_not_change_mode();
 	test_shrink_brings_clipped_band_back();
 	test_move_mode_highlights_selected_and_hides_caret();
-	test_label_carries_its_own_pad();
-	test_only_selected_label_is_highlighted();
+	test_band_carries_its_own_pad();
+	test_only_selected_band_is_highlighted();
 	test_highlight_moves_with_selection();
 	test_dim_selected_band_is_highlighted();
 	test_empty_selected_band_is_highlighted();
 	test_type_mode_has_no_highlight_and_visible_caret();
+	test_add_text_moves_old_text_left_and_types_on_the_right();
+	test_typed_text_on_the_right_is_right_aligned();
+	test_add_text_on_a_band_with_two_texts_is_a_noop();
+	test_add_text_with_no_bands_is_a_noop();
+	test_add_text_on_an_empty_text();
+	test_escape_right_after_add_text_keeps_empty_right_text();
+	test_enter_type_on_two_texts_types_into_the_right_one();
 	return 0;
 }

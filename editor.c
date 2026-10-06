@@ -108,6 +108,13 @@ void editor_apply(struct editor *e, struct key_event ev)
 		insert_node(e);
 		e->mode = MODE_TYPE;
 		break;
+	case EVENT_ADD_TEXT:
+		if (e->selected && e->selected->count < 2) {
+			text_buffer_init(&e->selected->texts[1], e->cols - 1);
+			e->selected->count = 2;
+			e->mode = MODE_TYPE;
+		}
+		break;
 	case EVENT_ESCAPE:
 		e->mode = MODE_MOVE;
 		break;
@@ -151,6 +158,15 @@ void editor_apply(struct editor *e, struct key_event ev)
 	}
 }
 
+static int text_col(int cols, int len, int index, int count)
+{
+	if (count == 1)
+		return (cols - len) / 2 + 1;
+	if (index == 0)
+		return 3;
+	return cols - len - 1;
+}
+
 struct layout layout(const struct editor *e)
 {
 	struct layout l;
@@ -174,24 +190,27 @@ struct layout layout(const struct editor *e)
 		if (row > visible)
 			break;
 
-		struct text_buffer *text = active_text(oldest);
-
 		struct placed_band *p = &l.bands[l.count];
 		p->row = row;
 		p->pad = oldest->pad;
 		p->style = oldest->style;
 		p->style.highlight =
 			oldest == e->selected && e->mode == MODE_MOVE;
-		p->count = 1;
-		p->texts[0].col = (e->cols - text->len) / 2 + 1;
-		p->texts[0].text = text->data;
-		p->texts[0].len = text->len;
+		p->count = oldest->count;
+		for (int i = 0; i < oldest->count; i++) {
+			struct text_buffer *t = &oldest->texts[i];
+			p->texts[i].col =
+				text_col(e->cols, t->len, i, oldest->count);
+			p->texts[i].text = t->data;
+			p->texts[i].len = t->len;
+		}
 		l.count++;
 
 		if (oldest == e->selected && e->mode == MODE_TYPE) {
 			l.caret_visible = 1;
 			l.caret_row = row;
-			l.caret_col = p->texts[0].col + text->cursor;
+			l.caret_col = p->texts[oldest->count - 1].col +
+				      active_text(oldest)->cursor;
 		}
 
 		top += 2 * oldest->pad + 1;
