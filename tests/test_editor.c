@@ -1067,6 +1067,101 @@ static void test_two_texts_on_a_one_line_band_stay_side_by_side(void)
 	editor_free(e);
 }
 
+static void test_add_text_on_a_tall_band_stacks_the_texts(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].pad == 1);
+	assert(l.bands[0].count == 2);
+	assert(l.bands[0].texts[0].row == l.bands[0].row - 1);
+	assert(l.bands[0].texts[0].col ==
+	       (COLS - (int)strlen("Login")) / 2 + 1);
+	assert(l.bands[0].texts[1].len == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
+	assert(l.bands[0].texts[1].col == (COLS - 0) / 2 + 1);
+	assert(editor_mode(e) == MODE_TYPE);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == l.bands[0].row + 1);
+
+	editor_free(e);
+}
+
+static void test_typed_text_on_a_tall_band_is_centred_below(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+
+	struct layout l = layout(e);
+	assert(l.bands[0].pad == 2);
+	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
+	assert(l.bands[0].texts[1].col ==
+	       (COLS - (int)strlen("Logout")) / 2 + 1);
+	assert(l.caret_row == l.bands[0].row + 1);
+	assert(l.caret_col == l.bands[0].texts[1].col + (int)strlen("Logout"));
+
+	editor_free(e);
+}
+
+static void
+test_escape_right_after_add_text_on_a_tall_band_keeps_empty_bottom_text(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].count == 2);
+	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
+	assert(l.bands[0].texts[0].row == l.bands[0].row - 1);
+	assert(l.bands[0].texts[1].len == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
+	assert(l.caret_visible == 0);
+	assert(l.bands[0].style.highlight == 1);
+
+	editor_free(e);
+}
+
+static void test_enter_type_on_a_stacked_band_types_into_the_bottom_text(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Lo");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ENTER_TYPE);
+	type(e, "gout");
+
+	struct layout l = layout(e);
+	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
+	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == l.bands[0].row + 1);
+	assert(l.caret_col == l.bands[0].texts[1].col + (int)strlen("Logout"));
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -1129,5 +1224,9 @@ int main(void)
 	test_enter_type_on_two_texts_types_into_the_right_one();
 	test_single_text_in_a_tall_band_stays_on_the_band_row();
 	test_two_texts_on_a_one_line_band_stay_side_by_side();
+	test_add_text_on_a_tall_band_stacks_the_texts();
+	test_typed_text_on_a_tall_band_is_centred_below();
+	test_escape_right_after_add_text_on_a_tall_band_keeps_empty_bottom_text();
+	test_enter_type_on_a_stacked_band_types_into_the_bottom_text();
 	return 0;
 }

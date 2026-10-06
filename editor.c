@@ -161,12 +161,17 @@ void editor_apply(struct editor *e, struct key_event ev)
 static void place_text(struct placed_text *out, int row, int pad, int cols,
 		       int len, int index, int count)
 {
-	(void)pad;
-	out->row = row;
 	if (count == 1) {
+		out->row = row;
 		out->col = (cols - len) / 2 + 1;
 		return;
 	}
+	if (pad >= 1) {
+		out->row = index == 0 ? row - 1 : row + 1;
+		out->col = (cols - len) / 2 + 1;
+		return;
+	}
+	out->row = row;
 	out->col = index == 0 ? 3 : cols - len - 1;
 }
 
