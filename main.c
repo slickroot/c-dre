@@ -5,9 +5,11 @@
 #include <unistd.h>
 
 #include "editor.h"
+#include "grid.h"
 #include "input.h"
 #include "layout.h"
 #include "paint.h"
+#include "term.h"
 
 static struct termios saved_tty;
 
@@ -21,7 +23,7 @@ static void enter(int *cols, int *rows)
 	raw.c_cc[VTIME] = 0;
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
-	paint_wallpaper();
+	term_enter();
 
 	struct winsize ws;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
@@ -31,8 +33,7 @@ static void enter(int *cols, int *rows)
 
 static void restore(void)
 {
-	write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
-	write(STDOUT_FILENO, "\x1b[?1049l", sizeof "\x1b[?1049l" - 1);
+	term_leave();
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_tty);
 	fflush(stdout);
 }
@@ -49,6 +50,10 @@ int main(void)
 	int cols, rows;
 	enter(&cols, &rows);
 
+	struct grid *g = grid_new(cols, rows);
+	if (!g)
+		exit(1);
+
 	struct editor *e = editor_new(cols, rows);
 	if (!e)
 		exit(1);
@@ -60,9 +65,11 @@ int main(void)
 			break;
 		editor_apply(e, ev);
 		struct layout l = layout(e);
-		paint_frame(&l);
+		paint_frame(&l, g);
+		term_flush(g);
 	}
 
+	grid_free(g);
 	editor_free(e);
 
 	return 0;
