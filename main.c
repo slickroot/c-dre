@@ -45,6 +45,23 @@ static void restore(void) {
   fflush(stdout);
 }
 
+static void insert_node(void) {
+  struct band *b = malloc(sizeof *b);
+  if (!b)
+    return;
+
+  b->row = bands ? bands->row + 1 : 1;
+  text_buffer_init(&b->buf, cols);
+  b->next = bands;
+  b->prev = NULL;
+  if (bands)
+    bands->prev = b;
+  bands = b;
+  selected = b;
+
+  paint_label(&b->buf, cols, b->row);
+}
+
 static void delete_node(struct band *node) {
   if (!node)
     return;
@@ -97,22 +114,10 @@ int main(void) {
     switch (ev.type) {
     case EVENT_QUIT:
       goto done;
-    case EVENT_ADD_BAND: {
-      struct band *b = malloc(sizeof *b);
-      if (b) {
-        b->row = bands ? bands->row + 1 : 1;
-        text_buffer_init(&b->buf, cols);
-        b->next = bands;
-        b->prev = NULL;
-        if (bands)
-          bands->prev = b;
-        bands = b;
-        selected = b;
-        mode = MODE_TYPE;
-        paint_label(&b->buf, cols, b->row);
-      }
+    case EVENT_ADD_BAND:
+      insert_node();
+      mode = MODE_TYPE;
       break;
-    }
     case EVENT_ESCAPE:
       mode = MODE_MOVE;
       break;
