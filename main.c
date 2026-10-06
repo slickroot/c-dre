@@ -53,13 +53,9 @@ int main(void)
 	if (!e)
 		exit(1);
 
-	struct input_parser parser;
-	input_parser_init(&parser);
-
 	char byte;
 	while (read(STDIN_FILENO, &byte, 1) == 1) {
-		struct key_event ev =
-			input_parse(&parser, byte, editor_mode(e));
+		struct key_event ev = input_parse(byte, editor_mode(e));
 		if (ev.type == EVENT_QUIT)
 			break;
 		editor_apply(e, ev);

@@ -21,12 +21,6 @@ struct key_event {
 	char ch;
 };
 
-struct input_parser {
-	int unused;
-};
-
-void input_parser_init(struct input_parser *parser);
-struct key_event input_parse(struct input_parser *parser, char byte,
-			     enum app_mode mode);
+struct key_event input_parse(char byte, enum app_mode mode);
 
 #endif

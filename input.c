@@ -1,15 +1,7 @@
 #include "input.h"
 
-void input_parser_init(struct input_parser *parser)
+struct key_event input_parse(char byte, enum app_mode mode)
 {
-	(void)parser;
-}
-
-struct key_event input_parse(struct input_parser *parser, char byte,
-			     enum app_mode mode)
-{
-	(void)parser;
-
 	if (byte == 0x03)
 		return (struct key_event){EVENT_QUIT, 0};
 
