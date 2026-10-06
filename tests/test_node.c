@@ -4,7 +4,7 @@
 #include "node.h"
 #include "text_buffer.h"
 
-#define MANY 10
+#define MANY 5
 #define TEXT_CAP 8
 
 static void test_new_is_empty(void)
@@ -13,9 +13,10 @@ static void test_new_is_empty(void)
 
 	assert(n != NULL);
 	assert(n->parent == NULL);
-	assert(n->children == NULL);
-	assert(n->count == 0);
-	assert(n->cap == 0);
+	assert(n->first_child == NULL);
+	assert(n->last_child == NULL);
+	assert(n->prev == NULL);
+	assert(n->next == NULL);
 	assert(n->data.text.data == NULL);
 	assert(n->data.text.cap == 0);
 	assert(n->data.style.dim == 0);
@@ -24,52 +25,63 @@ static void test_new_is_empty(void)
 	node_free(n);
 }
 
-static void test_append_sets_parent_and_order(void)
+static void test_append_to_empty_parent(void)
 {
 	struct node *root = node_new();
 	struct node *a = node_new();
-	struct node *b = node_new();
-	struct node *c = node_new();
 
-	assert(node_append(root, a) == a);
-	assert(node_append(root, b) == b);
-	assert(node_append(root, c) == c);
+	node_append(root, a);
 
+	assert(root->first_child == a);
+	assert(root->last_child == a);
 	assert(a->parent == root);
-	assert(b->parent == root);
-	assert(c->parent == root);
-	assert(root->count == 3);
-	assert(root->children[0] == a);
-	assert(root->children[1] == b);
-	assert(root->children[2] == c);
+	assert(a->prev == NULL);
+	assert(a->next == NULL);
 
 	node_free(root);
 }
 
-static void test_append_grows_past_initial_cap(void)
+static void test_append_several_keeps_order(void)
 {
 	struct node *root = node_new();
 	struct node *kids[MANY];
 
 	for (int i = 0; i < MANY; i++) {
 		kids[i] = node_new();
-		assert(kids[i] != NULL);
-		assert(node_append(root, kids[i]) == kids[i]);
+		node_append(root, kids[i]);
 	}
 
-	assert(root->count == MANY);
-	assert(root->cap >= MANY);
+	assert(root->first_child == kids[0]);
+	assert(root->last_child == kids[MANY - 1]);
+	assert(kids[0]->prev == NULL);
+	assert(kids[MANY - 1]->next == NULL);
 
 	for (int i = 0; i < MANY; i++) {
-		assert(root->children[i] == kids[i]);
 		assert(kids[i]->parent == root);
-		assert(node_index(kids[i]) == i);
+		if (i > 0)
+			assert(kids[i]->prev == kids[i - 1]);
+		if (i + 1 < MANY)
+			assert(kids[i]->next == kids[i + 1]);
 	}
 
+	struct node *n = root->first_child;
+	for (int i = 0; i < MANY; i++) {
+		assert(n == kids[i]);
+		n = n->next;
+	}
+	assert(n == NULL);
+
+	n = root->last_child;
+	for (int i = MANY; i > 0; i--) {
+		assert(n == kids[i - 1]);
+		n = n->prev;
+	}
+	assert(n == NULL);
+
 	node_free(root);
 }
 
-static void test_index_of_first_middle_and_last(void)
+static void test_delete_first_child(void)
 {
 	struct node *root = node_new();
 	struct node *a = node_new();
@@ -80,23 +92,18 @@ static void test_index_of_first_middle_and_last(void)
 	node_append(root, b);
 	node_append(root, c);
 
-	assert(node_index(a) == 0);
-	assert(node_index(b) == 1);
-	assert(node_index(c) == 2);
+	node_delete(a);
+
+	assert(root->first_child == b);
+	assert(root->last_child == c);
+	assert(b->prev == NULL);
+	assert(b->next == c);
+	assert(c->prev == b);
 
 	node_free(root);
 }
 
-static void test_index_of_root_is_minus_one(void)
-{
-	struct node *root = node_new();
-
-	assert(node_index(root) == -1);
-
-	node_free(root);
-}
-
-static void test_remove_first_child(void)
+static void test_delete_middle_child(void)
 {
 	struct node *root = node_new();
 	struct node *a = node_new();
@@ -107,18 +114,17 @@ static void test_remove_first_child(void)
 	node_append(root, b);
 	node_append(root, c);
 
-	node_remove(a);
+	node_delete(b);
 
-	assert(root->count == 2);
-	assert(root->children[0] == b);
-	assert(root->children[1] == c);
-	assert(node_index(b) == 0);
-	assert(node_index(c) == 1);
+	assert(root->first_child == a);
+	assert(root->last_child == c);
+	assert(a->next == c);
+	assert(c->prev == a);
 
 	node_free(root);
 }
 
-static void test_remove_middle_child(void)
+static void test_delete_last_child(void)
 {
 	struct node *root = node_new();
 	struct node *a = node_new();
@@ -129,54 +135,58 @@ static void test_remove_middle_child(void)
 	node_append(root, b);
 	node_append(root, c);
 
-	node_remove(b);
+	node_delete(c);
 
-	assert(root->count == 2);
-	assert(root->children[0] == a);
-	assert(root->children[1] == c);
-	assert(node_index(a) == 0);
-	assert(node_index(c) == 1);
+	assert(root->first_child == a);
+	assert(root->last_child == b);
+	assert(a->next == b);
+	assert(b->next == NULL);
 
 	node_free(root);
 }
 
-static void test_remove_last_child(void)
+static void test_delete_only_child(void)
 {
 	struct node *root = node_new();
 	struct node *a = node_new();
-	struct node *b = node_new();
-	struct node *c = node_new();
 
 	node_append(root, a);
-	node_append(root, b);
-	node_append(root, c);
 
-	node_remove(c);
+	node_delete(a);
 
-	assert(root->count == 2);
-	assert(root->children[0] == a);
-	assert(root->children[1] == b);
-	assert(node_index(a) == 0);
-	assert(node_index(b) == 1);
+	assert(root->first_child == NULL);
+	assert(root->last_child == NULL);
 
 	node_free(root);
 }
 
-static void test_remove_frees_subtree(void)
+static void test_delete_root_frees_it(void)
+{
+	struct node *root = node_new();
+	struct node *a = node_new();
+
+	node_append(root, a);
+
+	node_delete(root);
+}
+
+static void test_delete_frees_subtree(void)
 {
 	struct node *root = node_new();
 	struct node *band = node_new();
-	struct node *band_child = node_new();
+	struct node *t1 = node_new();
+	struct node *t2 = node_new();
 
 	node_append(root, band);
-	node_append(band, band_child);
-	text_buffer_init(&band_child->data.text, TEXT_CAP);
-	text_buffer_insert(&band_child->data.text, 'x');
+	node_append(band, t1);
+	node_append(band, t2);
+	text_buffer_init(&t2->data.text, TEXT_CAP);
+	text_buffer_insert(&t2->data.text, 'x');
 
-	node_remove(band);
+	node_delete(band);
 
-	assert(root->count == 0);
-	assert(node_index(root) == -1);
+	assert(root->first_child == NULL);
+	assert(root->last_child == NULL);
 
 	node_free(root);
 }
@@ -204,14 +214,14 @@ static void test_free_tree_with_mixed_text_buffers(void)
 int main(void)
 {
 	test_new_is_empty();
-	test_append_sets_parent_and_order();
-	test_append_grows_past_initial_cap();
-	test_index_of_first_middle_and_last();
-	test_index_of_root_is_minus_one();
-	test_remove_first_child();
-	test_remove_middle_child();
-	test_remove_last_child();
-	test_remove_frees_subtree();
+	test_append_to_empty_parent();
+	test_append_several_keeps_order();
+	test_delete_first_child();
+	test_delete_middle_child();
+	test_delete_last_child();
+	test_delete_only_child();
+	test_delete_root_frees_it();
+	test_delete_frees_subtree();
 	test_free_tree_with_mixed_text_buffers();
 	return 0;
 }
