@@ -105,9 +105,3 @@ disappears and the band above becomes selected (`delete_node` unchanged
 behavior). Highlight the topmost band, press `d`, confirm the band below
 becomes selected. Delete the last remaining band, confirm the screen is
 empty with no caret. Quit and confirm the terminal is restored.
-
-## Follow-up (separate PR, out of scope here)
-
-Adopt a `.clang-format` (`BasedOnStyle: Google`, `IndentWidth: 4`) and
-reformat the whole codebase with it. Not bundled into this refactor so the
-node-rename diff stays readable on its own.
