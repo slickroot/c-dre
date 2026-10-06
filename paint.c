@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 #include <unistd.h>
 
 #include "paint.h"
@@ -13,11 +14,15 @@ void paint_wallpaper(void)
 	write(STDOUT_FILENO, "\x1b[1;1H", sizeof "\x1b[1;1H" - 1);
 }
 
+static const char *fg_for(struct style s)
+{
+	return s.dim ? "\x1b[38;2;107;107;115m" /* #6B6B73 */
+		     : "\x1b[38;2;201;201;207m";
+}
+
 void paint_frame(const struct layout *l)
 {
 	write(STDOUT_FILENO, "\x1b[?2026h", sizeof "\x1b[?2026h" - 1);
-	write(STDOUT_FILENO, "\x1b[38;2;201;201;207m",
-	      sizeof "\x1b[38;2;201;201;207m" - 1);
 	write(STDOUT_FILENO, "\x1b[2J", sizeof "\x1b[2J" - 1);
 
 	for (int i = 0; i < l->count; i++) {
@@ -28,6 +33,9 @@ void paint_frame(const struct layout *l)
 				 p->col);
 
 		write(STDOUT_FILENO, cup, n);
+
+		const char *fg = fg_for(p->style);
+		write(STDOUT_FILENO, fg, strlen(fg));
 		write(STDOUT_FILENO, p->text, p->len);
 	}
 
