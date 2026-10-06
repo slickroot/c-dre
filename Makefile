@@ -32,9 +32,9 @@ $(BUILD_DIR)/test_input: tests/test_input.c input.c input.h
 	@mkdir -p $(BUILD_DIR)
 	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_input.c input.c
 
-$(BUILD_DIR)/test_editor: tests/test_editor.c editor.c editor.h node.c node.h layout.h text_buffer.c text_buffer.h
+$(BUILD_DIR)/test_editor: tests/test_editor.c editor.c editor.h node.c node.h layout.h text_buffer.c text_buffer.h paint.c paint.h grid.c grid.h
 	@mkdir -p $(BUILD_DIR)
-	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_editor.c editor.c node.c text_buffer.c
+	$(CC) $(CPPFLAGS) $(CFLAGS) -o $@ tests/test_editor.c editor.c node.c text_buffer.c paint.c grid.c
 
 $(BUILD_DIR)/test_grid: tests/test_grid.c grid.c grid.h
 	@mkdir -p $(BUILD_DIR)
