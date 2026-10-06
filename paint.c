@@ -4,16 +4,6 @@
 
 #include "paint.h"
 
-void paint_wallpaper(void)
-{
-	write(STDOUT_FILENO, "\x1b[?1049h", sizeof "\x1b[?1049h" - 1);
-	write(STDOUT_FILENO, "\x1b[?25l", sizeof "\x1b[?25l" - 1);
-	write(STDOUT_FILENO, "\x1b[48;2;10;10;11m",
-	      sizeof "\x1b[48;2;10;10;11m" - 1);
-	write(STDOUT_FILENO, "\x1b[2J", sizeof "\x1b[2J" - 1);
-	write(STDOUT_FILENO, "\x1b[1;1H", sizeof "\x1b[1;1H" - 1);
-}
-
 static const char *fg_for(struct style s)
 {
 	return s.dim ? "\x1b[38;2;107;107;115m" /* #6B6B73 */

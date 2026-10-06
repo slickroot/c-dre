@@ -8,6 +8,7 @@
 #include "input.h"
 #include "layout.h"
 #include "paint.h"
+#include "term.h"
 
 static struct termios saved_tty;
 
@@ -21,7 +22,7 @@ static void enter(int *cols, int *rows)
 	raw.c_cc[VTIME] = 0;
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw);
 
-	paint_wallpaper();
+	term_enter();
 
 	struct winsize ws;
 	ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws);
@@ -31,8 +32,7 @@ static void enter(int *cols, int *rows)
 
 static void restore(void)
 {
-	write(STDOUT_FILENO, "\x1b[0m", sizeof "\x1b[0m" - 1);
-	write(STDOUT_FILENO, "\x1b[?1049l", sizeof "\x1b[?1049l" - 1);
+	term_leave();
 	tcsetattr(STDIN_FILENO, TCSAFLUSH, &saved_tty);
 	fflush(stdout);
 }

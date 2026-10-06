@@ -3,7 +3,7 @@ CFLAGS = -std=c11 -Wall -Wextra -O2
 CPPFLAGS = -I.
 
 BUILD_DIR = build
-SRCS = main.c editor.c text_buffer.c input.c paint.c
+SRCS = main.c editor.c text_buffer.c input.c paint.c grid.c term.c
 OBJS = $(SRCS:%.c=$(BUILD_DIR)/%.o)
 TEST_BINS = $(BUILD_DIR)/test_text_buffer $(BUILD_DIR)/test_input $(BUILD_DIR)/test_editor $(BUILD_DIR)/test_grid
 
