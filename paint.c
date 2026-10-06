@@ -55,8 +55,8 @@ void paint_frame(const struct layout *l)
 
 		for (int t = 0; t < p->count; t++) {
 			char cup[32];
-			int n = snprintf(cup, sizeof cup, "\x1b[%d;%dH", p->row,
-					 p->texts[t].col);
+			int n = snprintf(cup, sizeof cup, "\x1b[%d;%dH",
+					 p->texts[t].row, p->texts[t].col);
 
 			write(STDOUT_FILENO, cup, n);
 			write(STDOUT_FILENO, p->texts[t].text, p->texts[t].len);

@@ -9,6 +9,7 @@ struct style {
 };
 
 struct placed_text {
+	int row;
 	int col;
 	const char *text;
 	int len;

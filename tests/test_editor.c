@@ -57,8 +57,9 @@ static void test_add_band(void)
 	assert(l.bands[0].row == 1);
 	assert(l.bands[0].texts[0].len == 0);
 	assert(l.bands[0].texts[0].col == COLS / 2 + 1);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
 	assert(l.caret_visible == 1);
-	assert(l.caret_row == 1);
+	assert(l.caret_row == l.bands[0].texts[0].row);
 	assert(l.caret_col == COLS / 2 + 1);
 	assert(editor_mode(e) == MODE_TYPE);
 
@@ -87,6 +88,8 @@ static void test_type_text(void)
 	assert(l.bands[0].texts[0].len == 2);
 	assert(strcmp(l.bands[0].texts[0].text, "hi") == 0);
 	assert(l.bands[0].texts[0].col == (COLS - 2) / 2 + 1);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.caret_row == l.bands[0].texts[0].row);
 	assert(l.caret_col == l.bands[0].texts[0].col + 2);
 
 	editor_free(e);
@@ -130,8 +133,9 @@ static void test_three_bands_stack_downwards(void)
 	assert(l.bands[0].row == 1);
 	assert(l.bands[1].row == 2);
 	assert(l.bands[2].row == 3);
+	assert(l.bands[2].texts[0].row == l.bands[2].row);
 	assert(l.caret_visible == 1);
-	assert(l.caret_row == 3);
+	assert(l.caret_row == l.bands[2].texts[0].row);
 
 	editor_free(e);
 }
@@ -444,14 +448,14 @@ static void test_grow_band_centres_text(void)
 	assert(l.count == 1);
 	assert(l.bands[0].row == 2);
 	assert(l.caret_visible == 1);
-	assert(l.caret_row == 2);
+	assert(l.caret_row == l.bands[0].texts[0].row);
 
 	apply(e, EVENT_GROW_BAND);
 	l = layout(e);
 	assert(l.count == 1);
 	assert(l.bands[0].row == 3);
 	assert(l.caret_visible == 1);
-	assert(l.caret_row == 3);
+	assert(l.caret_row == l.bands[0].texts[0].row);
 
 	editor_free(e);
 }
@@ -467,6 +471,7 @@ static void test_grow_middle_band_pushes_band_below(void)
 	assert(l.count == 3);
 	assert(l.bands[0].row == 1);
 	assert(l.bands[1].row == 3);
+	assert(l.bands[1].texts[0].row == l.bands[1].row);
 	assert(l.bands[2].row == 5);
 
 	apply(e, EVENT_GROW_BAND);
@@ -474,6 +479,7 @@ static void test_grow_middle_band_pushes_band_below(void)
 	assert(l.count == 3);
 	assert(l.bands[0].row == 1);
 	assert(l.bands[1].row == 4);
+	assert(l.bands[1].texts[0].row == l.bands[1].row);
 	assert(l.bands[2].row == 7);
 
 	editor_free(e);
@@ -523,14 +529,15 @@ static void test_typing_into_grown_band_keeps_caret_middle(void)
 	assert(l.bands[0].texts[0].len == 3);
 	assert(strcmp(l.bands[0].texts[0].text, "abc") == 0);
 	assert(l.bands[0].row == 2);
-	assert(l.caret_row == 2);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.caret_row == l.bands[0].texts[0].row);
 	assert(l.caret_col == l.bands[0].texts[0].col + 3);
 
 	apply(e, EVENT_BACKSPACE);
 	l = layout(e);
 	assert(l.bands[0].texts[0].len == 2);
 	assert(strcmp(l.bands[0].texts[0].text, "ab") == 0);
-	assert(l.caret_row == 2);
+	assert(l.caret_row == l.bands[0].texts[0].row);
 	assert(l.caret_col == l.bands[0].texts[0].col + 2);
 
 	editor_free(e);
@@ -669,6 +676,7 @@ static void test_grow_then_shrink_restores_layout(void)
 	assert(l.count == before.count);
 	for (int i = 0; i < before.count; i++) {
 		assert(l.bands[i].row == before.bands[i].row);
+		assert(l.bands[i].texts[0].row == before.bands[i].texts[0].row);
 		assert(l.bands[i].texts[0].col == before.bands[i].texts[0].col);
 		assert(strcmp(l.bands[i].texts[0].text,
 			      before.bands[i].texts[0].text) == 0);
@@ -851,7 +859,7 @@ static void test_type_mode_has_no_highlight_and_visible_caret(void)
 	assert(typed.count == 1);
 	assert(typed.bands[0].style.highlight == 0);
 	assert(typed.caret_visible == 1);
-	assert(typed.caret_row == 1);
+	assert(typed.caret_row == typed.bands[0].texts[0].row);
 	assert(typed.caret_col == typed.bands[0].texts[0].col + 2);
 
 	apply(e, EVENT_ESCAPE);
@@ -881,9 +889,11 @@ static void test_add_text_moves_old_text_left_and_types_on_the_right(void)
 	assert(l.bands[0].count == 2);
 	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
 	assert(l.bands[0].texts[0].col == 3);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
 	assert(l.bands[0].texts[1].len == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
 	assert(l.caret_visible == 1);
-	assert(l.caret_row == 1);
+	assert(l.caret_row == l.bands[0].texts[1].row);
 	assert(l.caret_col == l.bands[0].texts[1].col);
 	assert(l.bands[0].style.highlight == 0);
 
@@ -902,6 +912,8 @@ static void test_typed_text_on_the_right_is_right_aligned(void)
 	struct layout l = layout(e);
 	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
 	assert(l.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
+	assert(l.caret_row == l.bands[0].texts[1].row);
 	assert(l.caret_col == l.bands[0].texts[1].col + 6);
 
 	editor_free(e);
@@ -924,6 +936,8 @@ static void test_add_text_on_a_band_with_two_texts_is_a_noop(void)
 	assert(l.bands[0].count == 2);
 	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
 	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
 	assert(l.bands[0].style.highlight == 1);
 	assert(l.caret_visible == 0);
 
@@ -956,13 +970,17 @@ static void test_add_text_on_an_empty_text(void)
 	assert(l.bands[0].texts[0].len == 0);
 	assert(l.bands[0].texts[0].col == 3);
 	assert(l.bands[0].texts[1].len == 0);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
 	assert(l.caret_visible == 1);
+	assert(l.caret_row == l.bands[0].texts[1].row);
 	assert(l.caret_col == l.bands[0].texts[1].col);
 
 	type(e, "Logout");
 	l = layout(e);
 	assert(l.bands[0].texts[0].len == 0);
 	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
 
 	editor_free(e);
 }
@@ -981,6 +999,8 @@ static void test_escape_right_after_add_text_keeps_empty_right_text(void)
 	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
 	assert(l.bands[0].texts[0].col == 3);
 	assert(l.bands[0].texts[1].len == 0);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
 	assert(l.caret_visible == 0);
 	assert(l.bands[0].style.highlight == 1);
 
@@ -1002,8 +1022,47 @@ static void test_enter_type_on_two_texts_types_into_the_right_one(void)
 	struct layout l = layout(e);
 	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
 	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
 	assert(l.caret_visible == 1);
+	assert(l.caret_row == l.bands[0].texts[1].row);
 	assert(l.caret_col == l.bands[0].texts[1].col + 6);
+
+	editor_free(e);
+}
+
+static void test_single_text_in_a_tall_band_stays_on_the_band_row(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ESCAPE);
+
+	struct layout l = layout(e);
+	assert(l.bands[0].pad == 1);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.bands[0].texts[0].col ==
+	       (COLS - (int)strlen("Login")) / 2 + 1);
+
+	editor_free(e);
+}
+
+static void test_two_texts_on_a_one_line_band_stay_side_by_side(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+
+	struct layout l = layout(e);
+	assert(l.bands[0].pad == 0);
+	assert(l.bands[0].count == 2);
+	assert(l.bands[0].texts[0].row == l.bands[0].row);
+	assert(l.bands[0].texts[0].col == 3);
+	assert(l.bands[0].texts[1].row == l.bands[0].row);
+	assert(l.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
 
 	editor_free(e);
 }
@@ -1068,5 +1127,7 @@ int main(void)
 	test_add_text_on_an_empty_text();
 	test_escape_right_after_add_text_keeps_empty_right_text();
 	test_enter_type_on_two_texts_types_into_the_right_one();
+	test_single_text_in_a_tall_band_stays_on_the_band_row();
+	test_two_texts_on_a_one_line_band_stay_side_by_side();
 	return 0;
 }
