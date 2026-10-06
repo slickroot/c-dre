@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include "editor.h"
+#include "grid.h"
 #include "input.h"
 #include "layout.h"
 #include "paint.h"
@@ -49,6 +50,10 @@ int main(void)
 	int cols, rows;
 	enter(&cols, &rows);
 
+	struct grid *g = grid_new(cols, rows);
+	if (!g)
+		exit(1);
+
 	struct editor *e = editor_new(cols, rows);
 	if (!e)
 		exit(1);
@@ -60,9 +65,11 @@ int main(void)
 			break;
 		editor_apply(e, ev);
 		struct layout l = layout(e);
-		paint_frame(&l);
+		paint_frame(&l, g);
+		term_flush(g);
 	}
 
+	grid_free(g);
 	editor_free(e);
 
 	return 0;
