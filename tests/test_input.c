@@ -72,6 +72,19 @@ static void test_i_is_char_in_type_mode(void)
 	assert(ev.ch == 'i');
 }
 
+static void test_add_text_key(void)
+{
+	struct key_event ev = input_parse('o', MODE_MOVE);
+	assert(ev.type == EVENT_ADD_TEXT);
+}
+
+static void test_o_is_char_in_type_mode(void)
+{
+	struct key_event ev = input_parse('o', MODE_TYPE);
+	assert(ev.type == EVENT_CHAR);
+	assert(ev.ch == 'o');
+}
+
 static void test_k_and_j_in_move_mode(void)
 {
 	struct key_event ev = input_parse('k', MODE_MOVE);
@@ -183,6 +196,8 @@ int main(void)
 	test_a_is_char_in_type_mode();
 	test_i_enters_type_mode();
 	test_i_is_char_in_type_mode();
+	test_add_text_key();
+	test_o_is_char_in_type_mode();
 	test_k_and_j_in_move_mode();
 	test_k_and_j_are_char_in_type_mode();
 	test_delete_band_key();

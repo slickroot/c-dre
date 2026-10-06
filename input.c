@@ -9,6 +9,9 @@ struct key_event input_parse(char byte, enum app_mode mode)
 		if (byte == 'a')
 			return (struct key_event){EVENT_ADD_BAND, 0};
 
+		if (byte == 'o')
+			return (struct key_event){EVENT_ADD_TEXT, 0};
+
 		if (byte == 'i')
 			return (struct key_event){EVENT_ENTER_TYPE, 0};
 
