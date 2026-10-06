@@ -124,6 +124,10 @@ void editor_apply(struct editor *e, struct key_event ev)
 		if (e->selected)
 			e->selected->style.dim = !e->selected->style.dim;
 		break;
+	case EVENT_GROW_BAND:
+		if (e->selected)
+			e->selected->pad++;
+		break;
 	case EVENT_QUIT:
 	case EVENT_NONE:
 		break;
