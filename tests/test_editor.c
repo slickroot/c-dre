@@ -591,6 +591,161 @@ static void test_grow_clips_band_with_only_padding_visible(void)
 	editor_free(e);
 }
 
+static void test_shrink_band_centres_label_again(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_SHRINK_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 2);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == 2);
+
+	apply(e, EVENT_SHRINK_BAND);
+	l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 1);
+	assert(l.caret_visible == 1);
+	assert(l.caret_row == 1);
+
+	editor_free(e);
+}
+
+static void test_shrink_one_line_band_stays_one_line(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_SHRINK_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 1);
+	assert(l.caret_row == 1);
+
+	apply(e, EVENT_GROW_BAND);
+	l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 2);
+	assert(l.caret_row == 2);
+
+	editor_free(e);
+}
+
+static void test_shrink_middle_band_pulls_band_below_up(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_SELECT_UP);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_SHRINK_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 3);
+	assert(l.labels[0].row == 1);
+	assert(l.labels[1].row == 3);
+	assert(l.labels[2].row == 5);
+
+	editor_free(e);
+}
+
+static void test_grow_then_shrink_restores_layout(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 3);
+	apply(e, EVENT_SELECT_UP);
+	struct layout before = layout(e);
+
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_SHRINK_BAND);
+	apply(e, EVENT_SHRINK_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == before.count);
+	for (int i = 0; i < before.count; i++) {
+		assert(l.labels[i].row == before.labels[i].row);
+		assert(l.labels[i].col == before.labels[i].col);
+		assert(strcmp(l.labels[i].text, before.labels[i].text) == 0);
+	}
+	assert(l.caret_visible == before.caret_visible);
+	assert(l.caret_row == before.caret_row);
+	assert(l.caret_col == before.caret_col);
+
+	editor_free(e);
+}
+
+static void test_typing_into_shrunk_band_keeps_caret_middle(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	type(e, "ab");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_SHRINK_BAND);
+	type(e, "c");
+
+	struct layout l = layout(e);
+	assert(l.labels[0].len == 3);
+	assert(strcmp(l.labels[0].text, "abc") == 0);
+	assert(l.labels[0].row == 2);
+	assert(l.caret_row == 2);
+	assert(l.caret_col == l.labels[0].col + 3);
+
+	editor_free(e);
+}
+
+static void test_shrink_with_no_bands_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_SHRINK_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 0);
+	assert(l.caret_visible == 0);
+
+	editor_free(e);
+}
+
+static void test_shrink_does_not_change_mode(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	add_bands(e, 1);
+	apply(e, EVENT_ESCAPE);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	apply(e, EVENT_SHRINK_BAND);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	editor_free(e);
+}
+
+static void test_shrink_brings_clipped_band_back(void)
+{
+	struct editor *e = fresh(COLS, 4);
+	add_bands(e, 1);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ADD_BAND);
+
+	struct layout l = layout(e);
+	assert(l.count == 1);
+	assert(l.labels[0].row == 3);
+
+	apply(e, EVENT_SELECT_UP);
+	apply(e, EVENT_SHRINK_BAND);
+	l = layout(e);
+	assert(l.count == 2);
+	assert(l.labels[0].row == 2);
+	assert(l.labels[1].row == 4);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -629,5 +784,13 @@ int main(void)
 	test_grow_does_not_change_mode();
 	test_grow_clips_band_below_bottom();
 	test_grow_clips_band_with_only_padding_visible();
+	test_shrink_band_centres_label_again();
+	test_shrink_one_line_band_stays_one_line();
+	test_shrink_middle_band_pulls_band_below_up();
+	test_grow_then_shrink_restores_layout();
+	test_typing_into_shrunk_band_keeps_caret_middle();
+	test_shrink_with_no_bands_is_noop();
+	test_shrink_does_not_change_mode();
+	test_shrink_brings_clipped_band_back();
 	return 0;
 }
