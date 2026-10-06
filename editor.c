@@ -6,6 +6,7 @@
 struct band {
 	struct text_buffer buf;
 	struct style style;
+	int pad;
 	struct band *next;
 	struct band *prev;
 };
@@ -25,6 +26,7 @@ static void insert_node(struct editor *e)
 		return;
 
 	b->style = (struct style){0};
+	b->pad = 0;
 	text_buffer_init(&b->buf, e->cols - 1);
 	b->next = e->bands;
 	b->prev = NULL;
@@ -145,7 +147,9 @@ struct layout layout(const struct editor *e)
 	while (oldest && oldest->next)
 		oldest = oldest->next;
 
-	for (int row = 1; oldest; oldest = oldest->prev, row++) {
+	int top = 1;
+	for (; oldest; oldest = oldest->prev) {
+		int row = top + oldest->pad;
 		if (row > visible)
 			break;
 
@@ -163,6 +167,8 @@ struct layout layout(const struct editor *e)
 			l.caret_col = (e->cols - oldest->buf.len) / 2 +
 				      oldest->buf.cursor + 1;
 		}
+
+		top += 2 * oldest->pad + 1;
 	}
 
 	return l;
