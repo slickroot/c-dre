@@ -24,7 +24,7 @@ static struct node *new_text(struct editor *e)
 
 static struct node *active_text(struct node *band)
 {
-	return band->children[band->count - 1];
+	return band->last_child;
 }
 
 static void add_band(struct editor *e)
@@ -33,17 +33,14 @@ static void add_band(struct editor *e)
 	if (!band)
 		return;
 
-	if (!node_append(e->root, band)) {
+	struct node *text = new_text(e);
+	if (!text) {
 		node_free(band);
 		return;
 	}
 
-	struct node *text = new_text(e);
-	if (!text || !node_append(band, text)) {
-		node_free(text);
-		node_remove(band);
-		return;
-	}
+	node_append(band, text);
+	node_append(e->root, band);
 
 	e->selected = band;
 	e->mode = MODE_TYPE;
@@ -51,14 +48,14 @@ static void add_band(struct editor *e)
 
 static void add_text(struct editor *e)
 {
-	if (!e->selected || e->selected->count >= 2)
+	if (!e->selected || e->selected->first_child != e->selected->last_child)
 		return;
 
 	struct node *text = new_text(e);
-	if (!text || !node_append(e->selected, text)) {
-		node_free(text);
+	if (!text)
 		return;
-	}
+
+	node_append(e->selected, text);
 
 	e->mode = MODE_TYPE;
 }
@@ -112,18 +109,12 @@ void editor_apply(struct editor *e, struct key_event ev)
 		e->mode = MODE_TYPE;
 		break;
 	case EVENT_SELECT_UP:
-		if (e->selected) {
-			int i = node_index(e->selected);
-			if (i > 0)
-				e->selected = e->root->children[i - 1];
-		}
+		if (e->selected && e->selected->prev)
+			e->selected = e->selected->prev;
 		break;
 	case EVENT_SELECT_DOWN:
-		if (e->selected) {
-			int i = node_index(e->selected);
-			if (i < e->root->count - 1)
-				e->selected = e->root->children[i + 1];
-		}
+		if (e->selected && e->selected->next)
+			e->selected = e->selected->next;
 		break;
 	case EVENT_CHAR:
 		if (e->selected)
@@ -139,15 +130,12 @@ void editor_apply(struct editor *e, struct key_event ev)
 		if (!e->selected)
 			break;
 
-		int i = node_index(e->selected);
-		struct node *heir = NULL;
+		struct node *heir = e->selected->prev;
 
-		if (i > 0)
-			heir = e->root->children[i - 1];
-		else if (i + 1 < e->root->count)
-			heir = e->root->children[i + 1];
+		if (!heir)
+			heir = e->selected->next;
 
-		node_remove(e->selected);
+		node_delete(e->selected);
 		e->selected = heir;
 		break;
 	}
@@ -203,8 +191,8 @@ struct layout layout(const struct editor *e)
 		return l;
 
 	int top = 1;
-	for (int i = 0; i < e->root->count; i++) {
-		struct node *band = e->root->children[i];
+	for (struct node *band = e->root->first_child; band;
+	     band = band->next) {
 		int row = top + band->data.pad;
 		if (row > visible)
 			break;
@@ -215,20 +203,25 @@ struct layout layout(const struct editor *e)
 		p->style = band->data.style;
 		p->style.highlight =
 			band == e->selected && e->mode == MODE_MOVE;
-		p->count = band->count;
-		for (int j = 0; j < band->count; j++) {
-			struct text_buffer *t = &band->children[j]->data.text;
-			place_text(&p->texts[j], row, band->data.pad, e->cols,
-				   t->len, j, band->count);
-			p->texts[j].text = t->data;
-			p->texts[j].len = t->len;
+		p->count = 0;
+		for (struct node *t = band->first_child; t; t = t->next)
+			p->count++;
+
+		int i = 0;
+		for (struct node *text = band->first_child; text;
+		     text = text->next, i++) {
+			struct text_buffer *t = &text->data.text;
+			place_text(&p->texts[i], row, band->data.pad, e->cols,
+				   t->len, i, p->count);
+			p->texts[i].text = t->data;
+			p->texts[i].len = t->len;
 		}
 		l.count++;
 
 		if (band == e->selected && e->mode == MODE_TYPE) {
 			l.caret_visible = 1;
-			l.caret_row = p->texts[band->count - 1].row;
-			l.caret_col = p->texts[band->count - 1].col +
+			l.caret_row = p->texts[p->count - 1].row;
+			l.caret_col = p->texts[p->count - 1].col +
 				      active_text(band)->data.text.cursor;
 		}
 
