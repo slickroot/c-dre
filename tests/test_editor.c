@@ -1162,6 +1162,51 @@ static void test_enter_type_on_a_stacked_band_types_into_the_bottom_text(void)
 	editor_free(e);
 }
 
+static void test_growing_and_shrinking_flips_the_arrangement(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+
+	struct layout side_by_side = layout(e);
+	assert(side_by_side.bands[0].pad == 0);
+	assert(side_by_side.bands[0].texts[0].row == side_by_side.bands[0].row);
+	assert(side_by_side.bands[0].texts[0].col == 3);
+	assert(side_by_side.bands[0].texts[1].row == side_by_side.bands[0].row);
+	assert(side_by_side.bands[0].texts[1].col ==
+	       COLS - (int)strlen("Logout") - 1);
+
+	apply(e, EVENT_GROW_BAND);
+
+	struct layout stacked = layout(e);
+	assert(stacked.bands[0].pad == 1);
+	assert(strcmp(stacked.bands[0].texts[0].text, "Login") == 0);
+	assert(strcmp(stacked.bands[0].texts[1].text, "Logout") == 0);
+	assert(stacked.bands[0].texts[0].row == stacked.bands[0].row - 1);
+	assert(stacked.bands[0].texts[0].col ==
+	       (COLS - (int)strlen("Login")) / 2 + 1);
+	assert(stacked.bands[0].texts[1].row == stacked.bands[0].row + 1);
+	assert(stacked.bands[0].texts[1].col ==
+	       (COLS - (int)strlen("Logout")) / 2 + 1);
+
+	apply(e, EVENT_SHRINK_BAND);
+
+	struct layout back = layout(e);
+	assert(back.bands[0].pad == 0);
+	assert(strcmp(back.bands[0].texts[0].text, "Login") == 0);
+	assert(strcmp(back.bands[0].texts[1].text, "Logout") == 0);
+	assert(back.bands[0].texts[0].row == back.bands[0].row);
+	assert(back.bands[0].texts[0].col == 3);
+	assert(back.bands[0].texts[1].row == back.bands[0].row);
+	assert(back.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -1228,5 +1273,6 @@ int main(void)
 	test_typed_text_on_a_tall_band_is_centred_below();
 	test_escape_right_after_add_text_on_a_tall_band_keeps_empty_bottom_text();
 	test_enter_type_on_a_stacked_band_types_into_the_bottom_text();
+	test_growing_and_shrinking_flips_the_arrangement();
 	return 0;
 }
