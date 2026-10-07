@@ -608,6 +608,38 @@ static void test_clips_a_padded_band_whose_text_row_is_past_the_screen(void)
 	editor_free(e);
 }
 
+static void test_clips_the_band_below_a_tall_stacked_band(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+
+	apply(e, EVENT_ADD_BAND);
+	type(e, "a");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_SWITCH_DIRECTION);
+	next_band(e);
+
+	struct display_list dl;
+
+	render(e, COLS, 4, &dl);
+
+	struct node *tall = band_at(editor_root(e), 1);
+	struct node *below = band_at(editor_root(e), 2);
+
+	assert(tall->data.vertical);
+	assert(tall->box.row + tall->box.rows > 4);
+	assert(below->box.row > 4);
+	assert(find_text(&dl, tall->first_child->box) >= 0);
+	assert(count_borders(&dl) == 2);
+	assert(find_text(&dl, below->first_child->box) == -1);
+	assert(find_fill(&dl, below->box, HIGHLIGHT) == -1);
+
+	editor_free(e);
+}
+
 static void test_op_count_matches_the_tree_when_it_fits(void)
 {
 	struct editor *e = fresh(COLS, BIG_ROWS);
@@ -696,6 +728,7 @@ int main(void)
 	test_selected_band_fills_no_text();
 	test_clips_at_the_first_band_past_the_screen();
 	test_clips_a_padded_band_whose_text_row_is_past_the_screen();
+	test_clips_the_band_below_a_tall_stacked_band();
 	test_op_count_matches_the_tree_when_it_fits();
 	test_count_never_exceeds_max_ops();
 	test_a_smaller_tree_after_a_capped_one_starts_from_scratch();
