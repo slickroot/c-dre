@@ -2465,6 +2465,44 @@ static void test_backspace_after_select_up_and_down_highlights_the_row(void)
 	editor_free(e);
 }
 
+static void test_typing_j_and_k_in_a_stacked_row_inserts_characters(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ENTER_TYPE);
+	type(e, "jk");
+
+	struct grid *typed = frame(e);
+
+	int top = (COLS - (int)strlen("Login")) / 2 + 1;
+	int bottom = (COLS - (int)strlen("Logoutjk")) / 2 + 1;
+	assert_text(typed, 1, top, "Login", INK);
+	assert_text(typed, 3, bottom, "Logoutjk", INK);
+	assert_bg_rows(typed, 1, ROWS, CANVAS);
+	assert_caret(typed, 3, bottom + (int)strlen("Logoutjk"));
+	assert(editor_mode(e) == MODE_TYPE);
+
+	grid_free(typed);
+
+	apply(e, EVENT_ESCAPE);
+
+	struct grid *g = frame(e);
+
+	assert_bg(g, 1, top, HIGHLIGHT);
+	assert_bg(g, 3, bottom, HIGHLIGHT);
+	assert_bg_rows(g, 4, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -2564,5 +2602,6 @@ int main(void)
 	test_select_up_and_down_in_a_one_text_row_are_noops();
 	test_select_up_and_down_in_a_side_by_side_row_are_noops();
 	test_backspace_after_select_up_and_down_highlights_the_row();
+	test_typing_j_and_k_in_a_stacked_row_inserts_characters();
 	return 0;
 }
