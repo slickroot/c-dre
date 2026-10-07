@@ -27,6 +27,7 @@ struct node {
 struct node *node_new(void);
 void node_free(struct node *n);
 void node_append(struct node *parent, struct node *child);
+void node_insert_after(struct node *n, struct node *new_node);
 void node_delete(struct node *n);
 
 #endif
