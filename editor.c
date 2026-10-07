@@ -97,13 +97,22 @@ static void add_text(struct editor *e)
 	e->mode = MODE_TYPE;
 }
 
-static void add_box(struct editor *e)
+static struct node *new_box(struct editor *e)
 {
 	struct node *box = new_text(e);
 	if (!box)
-		return;
+		return NULL;
 
 	box->data.style.border = 1;
+	return box;
+}
+
+static void add_box(struct editor *e)
+{
+	struct node *box = new_box(e);
+	if (!box)
+		return;
+
 	node_append(e->selected, box);
 
 	e->selected = box;
