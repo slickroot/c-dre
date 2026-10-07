@@ -230,6 +230,11 @@ void editor_apply(struct editor *e, struct key_event ev)
 		if (is_band(e, e->selected) && e->selected->data.pad > 0)
 			e->selected->data.pad--;
 		break;
+	case EVENT_SWITCH_DIRECTION:
+		if (is_band(e, e->selected))
+			e->selected->data.vertical =
+				!e->selected->data.vertical;
+		break;
 	case EVENT_STEP_IN:
 		if (e->mode == MODE_MOVE && is_band(e, e->selected) &&
 		    e->selected->first_child)

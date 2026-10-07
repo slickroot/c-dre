@@ -13,6 +13,7 @@ struct node_data {
 	struct text_buffer text;
 	struct style style;
 	int pad;
+	int vertical;
 };
 
 struct node {
