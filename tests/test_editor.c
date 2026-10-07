@@ -1832,6 +1832,50 @@ static void test_toggle_dim_on_a_band_swaps_mixed_texts(void)
 	editor_free(e);
 }
 
+static void test_add_text_to_a_dim_row_starts_normal(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	struct grid *g = frame(e);
+
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", DIM);
+	assert_text(g, 1, right, "Logout", INK);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_typing_into_a_dim_text_keeps_it_dim(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_STEP_IN);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_ENTER_TYPE);
+	type(e, "cd");
+
+	struct grid *g = frame(e);
+
+	int col = (COLS - (int)strlen("Logincd")) / 2 + 1;
+	assert_text(g, 1, col, "Logincd", DIM);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	grid_free(g);
+	editor_free(e);
+}
+
 static void test_step_in_with_nothing_selected_is_noop(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
@@ -2300,6 +2344,8 @@ int main(void)
 	test_toggle_dim_on_a_text_leaves_its_sibling_alone();
 	test_toggle_dim_on_a_text_greyed_by_the_row();
 	test_toggle_dim_on_a_band_swaps_mixed_texts();
+	test_add_text_to_a_dim_row_starts_normal();
+	test_typing_into_a_dim_text_keeps_it_dim();
 	test_step_in_with_nothing_selected_is_noop();
 	test_step_out_on_a_whole_row_is_noop();
 	test_typing_and_backspace_still_delete_in_type_mode();
