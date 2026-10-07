@@ -34,6 +34,20 @@ void node_append(struct node *parent, struct node *child)
 	parent->last_child = child;
 }
 
+void node_insert_after(struct node *n, struct node *new_node)
+{
+	new_node->parent = n->parent;
+	new_node->prev = n;
+	new_node->next = n->next;
+
+	if (n->next)
+		n->next->prev = new_node;
+	else
+		n->parent->last_child = new_node;
+
+	n->next = new_node;
+}
+
 void node_delete(struct node *n)
 {
 	struct node *parent = n->parent;

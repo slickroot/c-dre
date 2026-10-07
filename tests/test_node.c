@@ -43,6 +43,74 @@ static void test_append_to_empty_parent(void)
 	node_free(root);
 }
 
+static void test_insert_after_last_child(void)
+{
+	struct node *root = node_new();
+	struct node *a = node_new();
+	struct node *b = node_new();
+	struct node *added = node_new();
+
+	node_append(root, a);
+	node_append(root, b);
+	node_insert_after(b, added);
+
+	assert(root->first_child == a);
+	assert(root->last_child == added);
+	assert(added->parent == root);
+	assert(added->prev == b);
+	assert(added->next == NULL);
+	assert(b->next == added);
+
+	node_free(root);
+}
+
+static void test_insert_after_in_the_middle(void)
+{
+	struct node *root = node_new();
+	struct node *a = node_new();
+	struct node *b = node_new();
+	struct node *c = node_new();
+	struct node *added = node_new();
+
+	node_append(root, a);
+	node_append(root, b);
+	node_append(root, c);
+	node_insert_after(b, added);
+
+	assert(root->first_child == a);
+	assert(root->last_child == c);
+	assert(added->parent == root);
+	assert(b->next == added);
+	assert(added->prev == b);
+	assert(added->next == c);
+	assert(c->prev == added);
+	assert(a->next == b);
+	assert(b->prev == a);
+	assert(c->next == NULL);
+
+	node_free(root);
+}
+
+static void test_insert_after_lone_child(void)
+{
+	struct node *root = node_new();
+	struct node *a = node_new();
+	struct node *added = node_new();
+
+	node_append(root, a);
+	node_insert_after(a, added);
+
+	assert(root->first_child == a);
+	assert(root->last_child == added);
+	assert(a->prev == NULL);
+	assert(a->next == added);
+	assert(added->prev == a);
+	assert(added->next == NULL);
+	assert(added->parent == root);
+
+	node_free(root);
+}
+
 static void test_append_several_keeps_order(void)
 {
 	struct node *root = node_new();
@@ -217,6 +285,9 @@ int main(void)
 	test_new_is_empty();
 	test_append_to_empty_parent();
 	test_append_several_keeps_order();
+	test_insert_after_last_child();
+	test_insert_after_in_the_middle();
+	test_insert_after_lone_child();
 	test_delete_first_child();
 	test_delete_middle_child();
 	test_delete_last_child();

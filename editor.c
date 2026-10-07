@@ -97,14 +97,34 @@ static void add_text(struct editor *e)
 	e->mode = MODE_TYPE;
 }
 
-static void add_box(struct editor *e)
+static struct node *new_box(struct editor *e)
 {
 	struct node *box = new_text(e);
 	if (!box)
-		return;
+		return NULL;
 
 	box->data.style.border = 1;
+	return box;
+}
+
+static void add_box(struct editor *e)
+{
+	struct node *box = new_box(e);
+	if (!box)
+		return;
+
 	node_append(e->selected, box);
+
+	e->selected = box;
+}
+
+static void add_box_after(struct editor *e)
+{
+	struct node *box = new_box(e);
+	if (!box)
+		return;
+
+	node_insert_after(e->selected, box);
 
 	e->selected = box;
 }
@@ -169,6 +189,8 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_ADD_TEXT:
 		if (is_band(e, e->selected))
 			add_text(e);
+		else if (is_box(e, e->selected))
+			add_box_after(e);
 		break;
 	case EVENT_ESCAPE:
 		e->mode = MODE_MOVE;
