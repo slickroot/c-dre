@@ -45,6 +45,9 @@ struct key_event input_parse(char byte, enum app_mode mode)
 		if (byte == 'l')
 			return (struct key_event){EVENT_SELECT_NEXT_TEXT, 0};
 
+		if (byte == 'r')
+			return (struct key_event){EVENT_SWITCH_DIRECTION, 0};
+
 		return (struct key_event){EVENT_NONE, 0};
 	}
 

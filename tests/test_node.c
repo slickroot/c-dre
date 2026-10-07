@@ -22,6 +22,7 @@ static void test_new_is_empty(void)
 	assert(n->data.style.dim == 0);
 	assert(n->data.style.border == 0);
 	assert(n->data.pad == 0);
+	assert(n->data.vertical == 0);
 
 	node_free(n);
 }

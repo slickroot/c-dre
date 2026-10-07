@@ -118,6 +118,19 @@ static void test_d_is_char_in_type_mode(void)
 	assert(ev.ch == 'd');
 }
 
+static void test_switch_direction_key(void)
+{
+	struct key_event ev = input_parse('r', MODE_MOVE);
+	assert(ev.type == EVENT_SWITCH_DIRECTION);
+}
+
+static void test_r_is_char_in_type_mode(void)
+{
+	struct key_event ev = input_parse('r', MODE_TYPE);
+	assert(ev.type == EVENT_CHAR);
+	assert(ev.ch == 'r');
+}
+
 static void test_toggle_dim_key(void)
 {
 	struct key_event ev = input_parse('-', MODE_MOVE);
@@ -224,6 +237,8 @@ static void test_h_and_l_in_type_mode(void)
 int main(void)
 {
 	test_quit();
+	test_switch_direction_key();
+	test_r_is_char_in_type_mode();
 	test_printable_char();
 	test_escape_in_type_mode();
 	test_escape_in_move_mode_is_none();

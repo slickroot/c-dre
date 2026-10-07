@@ -2713,8 +2713,124 @@ static void test_add_text_on_band_with_box_still_capped(void)
 	editor_free(e);
 }
 
+static void test_switch_direction_toggles_a_selected_band(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *band = editor_selected(e);
+	assert(!band->data.vertical);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+
+	assert(band->data.vertical);
+
+	editor_free(e);
+}
+
+static void test_switch_direction_twice_toggles_back(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *band = editor_selected(e);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+	apply(e, EVENT_SWITCH_DIRECTION);
+
+	assert(!band->data.vertical);
+
+	editor_free(e);
+}
+
+static void test_switch_direction_keeps_band_selected_and_mode(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *band = editor_selected(e);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+
+	assert(editor_selected(e) == band);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	editor_free(e);
+}
+
+static void test_add_after_switch_direction_adds_a_box(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *band = editor_selected(e);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+	apply(e, EVENT_ADD_BAND);
+
+	const struct node *box = editor_selected(e);
+	assert(box->parent == band);
+	assert(box->data.style.border);
+	assert(band->last_child == box);
+	assert(band->data.vertical);
+
+	editor_free(e);
+}
+
+static void test_switch_direction_on_box_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *box = editor_selected(e);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+
+	assert(editor_selected(e) == box);
+	assert(!box->data.vertical);
+	assert(!box->parent->data.vertical);
+
+	editor_free(e);
+}
+
+static void test_switch_direction_on_text_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *band = editor_selected(e);
+	apply(e, EVENT_STEP_IN);
+	const struct node *text = editor_selected(e);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+
+	assert(editor_selected(e) == text);
+	assert(!text->data.vertical);
+	assert(!band->data.vertical);
+
+	editor_free(e);
+}
+
+static void test_switch_direction_with_nothing_selected_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+
+	apply(e, EVENT_SWITCH_DIRECTION);
+
+	assert(!editor_selected(e));
+	assert(!editor_root(e)->data.vertical);
+
+	editor_free(e);
+}
+
 int main(void)
 {
+	test_switch_direction_toggles_a_selected_band();
+	test_switch_direction_twice_toggles_back();
+	test_switch_direction_keeps_band_selected_and_mode();
+	test_add_after_switch_direction_adds_a_box();
+	test_switch_direction_on_box_is_noop();
+	test_switch_direction_on_text_is_noop();
+	test_switch_direction_with_nothing_selected_is_noop();
 	test_add_on_band_appends_selected_box();
 	test_add_on_band_keeps_move_mode();
 	test_add_boxes_have_no_cap();
