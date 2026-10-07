@@ -1,9 +1,9 @@
 #ifndef PAINT_H
 #define PAINT_H
 
+#include "display.h"
 #include "grid.h"
-#include "layout.h"
 
-void paint_frame(const struct layout *l, struct grid *g);
+void paint_frame(const struct display_list *dl, struct grid *g);
 
 #endif

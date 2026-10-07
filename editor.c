@@ -93,6 +93,16 @@ enum app_mode editor_mode(const struct editor *e)
 	return e->mode;
 }
 
+struct node *editor_root(const struct editor *e)
+{
+	return e->root;
+}
+
+const struct node *editor_selected(const struct editor *e)
+{
+	return e->selected;
+}
+
 void editor_apply(struct editor *e, struct key_event ev)
 {
 	switch (ev.type) {
@@ -158,75 +168,4 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_NONE:
 		break;
 	}
-}
-
-static void place_text(struct placed_text *out, int row, int pad, int cols,
-		       int len, int index, int count)
-{
-	if (count == 1) {
-		out->row = row;
-		out->col = (cols - len) / 2 + 1;
-		return;
-	}
-	if (pad >= 1) {
-		out->row = index == 0 ? row - 1 : row + 1;
-		out->col = (cols - len) / 2 + 1;
-		return;
-	}
-	out->row = row;
-	out->col = index == 0 ? 3 : cols - len - 1;
-}
-
-struct layout layout(const struct editor *e)
-{
-	struct layout l;
-	int visible = e->rows < LAYOUT_MAX_BANDS ? e->rows : LAYOUT_MAX_BANDS;
-
-	l.count = 0;
-	l.caret_visible = 0;
-	l.caret_row = 0;
-	l.caret_col = 0;
-
-	if (e->cols <= 0)
-		return l;
-
-	int top = 1;
-	for (struct node *band = e->root->first_child; band;
-	     band = band->next) {
-		int row = top + band->data.pad;
-		if (row > visible)
-			break;
-
-		struct placed_band *p = &l.bands[l.count];
-		p->row = row;
-		p->pad = band->data.pad;
-		p->style = band->data.style;
-		p->style.highlight =
-			band == e->selected && e->mode == MODE_MOVE;
-		p->count = 0;
-		for (struct node *t = band->first_child; t; t = t->next)
-			p->count++;
-
-		int i = 0;
-		for (struct node *text = band->first_child; text;
-		     text = text->next, i++) {
-			struct text_buffer *t = &text->data.text;
-			place_text(&p->texts[i], row, band->data.pad, e->cols,
-				   t->len, i, p->count);
-			p->texts[i].text = t->data;
-			p->texts[i].len = t->len;
-		}
-		l.count++;
-
-		if (band == e->selected && e->mode == MODE_TYPE) {
-			l.caret_visible = 1;
-			l.caret_row = p->texts[p->count - 1].row;
-			l.caret_col = p->texts[p->count - 1].col +
-				      active_text(band)->data.text.cursor;
-		}
-
-		top += 2 * band->data.pad + 1;
-	}
-
-	return l;
 }

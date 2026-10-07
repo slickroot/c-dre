@@ -1,27 +1,20 @@
 #include "paint.h"
 
-static const uint32_t canvas = 0x0A0A0Bu;
-static const uint32_t ink = 0xC9C9CFu;
-static const uint32_t dim = 0x6B6B73u;
-static const uint32_t highlight = 0x1C1C20u;
-
-void paint_frame(const struct layout *l, struct grid *g)
+void paint_frame(const struct display_list *dl, struct grid *g)
 {
-	grid_clear(g, ink, canvas);
+	grid_clear(g, 0, 0);
 
-	for (int i = 0; i < l->count; i++) {
-		const struct placed_band *p = &l->bands[i];
+	for (int i = 0; i < dl->count; i++) {
+		const struct op *op = &dl->ops[i];
+		struct rect r = op->rect;
 
-		if (p->style.highlight)
-			grid_fill(g, p->row - p->pad, 1, g->cols,
-				  2 * p->pad + 1, highlight);
-
-		for (int t = 0; t < p->count; t++)
-			grid_text(g, p->texts[t].row, p->texts[t].col,
-				  p->texts[t].text, p->texts[t].len,
-				  p->style.dim ? dim : ink);
+		if (op->kind == OP_FILL)
+			grid_fill(g, r.row, r.col, r.cols, r.rows, op->colour);
+		else
+			grid_text(g, r.row, r.col, op->text, r.cols,
+				  op->colour);
 	}
 
-	if (l->caret_visible)
-		grid_cursor(g, l->caret_row, l->caret_col);
+	if (dl->caret_visible)
+		grid_cursor(g, dl->caret_row, dl->caret_col);
 }

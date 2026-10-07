@@ -2,9 +2,20 @@
 #include <string.h>
 
 #include "editor.h"
+#include "grid.h"
+#include "layout.h"
+#include "paint.h"
 
 #define COLS 40
 #define ROWS 40
+
+#define CANVAS 0x0A0A0Bu
+#define INK 0xC9C9CFu
+#define DIM 0x6B6B73u
+#define HIGHLIGHT 0x1C1C20u
+
+static int e_cols;
+static int e_rows;
 
 static void apply(struct editor *e, enum key_event_type type)
 {
@@ -32,18 +43,110 @@ static struct editor *fresh(int cols, int rows)
 {
 	struct editor *e = editor_new(cols, rows);
 	assert(e);
+	e_cols = cols;
+	e_rows = rows;
 	return e;
+}
+
+static struct grid *frame(struct editor *e)
+{
+	static struct display_list dl;
+
+	layout(editor_root(e), e_cols, e_rows);
+	display_list(e, &dl);
+	struct grid *g = grid_new(e_cols, e_rows);
+	assert(g);
+	paint_frame(&dl, g);
+	return g;
+}
+
+static const struct cell *cell(struct grid *g, int row, int col)
+{
+	const struct cell *c = grid_at(g, row, col);
+	assert(c);
+	return c;
+}
+
+static void assert_blank(struct grid *g, int row, int col)
+{
+	assert(cell(g, row, col)->ch == ' ');
+}
+
+static void assert_text(struct grid *g, int row, int col, const char *s,
+			uint32_t fg)
+{
+	for (int i = 0; s[i]; i++) {
+		const struct cell *c = cell(g, row, col + i);
+		assert(c->ch == s[i]);
+		assert(c->fg == fg);
+	}
+}
+
+static void assert_bg(struct grid *g, int row, int col, uint32_t bg)
+{
+	assert(cell(g, row, col)->bg == bg);
+}
+
+static void assert_row_blank(struct grid *g, int row)
+{
+	for (int col = 1; col <= g->cols; col++)
+		assert_blank(g, row, col);
+}
+
+static void assert_bg_rows(struct grid *g, int first, int last, uint32_t bg)
+{
+	for (int row = first < 1 ? 1 : first; row <= last && row <= g->rows;
+	     row++)
+		for (int col = 1; col <= g->cols; col++)
+			assert_bg(g, row, col, bg);
+}
+
+static void assert_all_blank(struct grid *g)
+{
+	for (int row = 1; row <= g->rows; row++)
+		assert_row_blank(g, row);
+}
+
+static void assert_caret(struct grid *g, int row, int col)
+{
+	assert(g->cursor_visible == 1);
+	assert(g->cursor_row == row);
+	assert(g->cursor_col == col);
+}
+
+static void assert_no_caret(struct grid *g)
+{
+	assert(g->cursor_visible == 0);
+}
+
+static void assert_same_frame(const struct grid *a, const struct grid *b)
+{
+	assert(a->cursor_visible == b->cursor_visible);
+	assert(a->cursor_row == b->cursor_row);
+	assert(a->cursor_col == b->cursor_col);
+	for (int row = 1; row <= a->rows; row++)
+		for (int col = 1; col <= a->cols; col++) {
+			const struct cell *x = grid_at(a, row, col);
+			const struct cell *y = grid_at(b, row, col);
+			assert(x->ch == y->ch);
+			assert(x->bg == y->bg);
+			if (x->ch != ' ')
+				assert(x->fg == y->fg);
+		}
 }
 
 static void test_new_editor_is_empty(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
+
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
 	assert(editor_mode(e) == MODE_MOVE);
 
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -52,17 +155,14 @@ static void test_add_band(void)
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_ADD_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[0].texts[0].len == 0);
-	assert(l.bands[0].texts[0].col == COLS / 2 + 1);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].texts[0].row);
-	assert(l.caret_col == COLS / 2 + 1);
+	struct grid *g = frame(e);
+
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, (COLS - (int)strlen("")) / 2 + 1);
 	assert(editor_mode(e) == MODE_TYPE);
 
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -70,10 +170,13 @@ static void test_new_band_text_is_normal(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_ADD_BAND);
+	type(e, "ab");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].style.dim == 0);
+	struct grid *g = frame(e);
 
+	assert_text(g, 1, (COLS - 2) / 2 + 1, "ab", INK);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -83,15 +186,15 @@ static void test_type_text(void)
 	apply(e, EVENT_ADD_BAND);
 	type(e, "hi");
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].texts[0].len == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "hi") == 0);
-	assert(l.bands[0].texts[0].col == (COLS - 2) / 2 + 1);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.caret_row == l.bands[0].texts[0].row);
-	assert(l.caret_col == l.bands[0].texts[0].col + 2);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 2) / 2 + 1;
+	assert_text(g, 1, col, "hi", INK);
+	assert_blank(g, 1, col + 2);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, col + 2);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -102,10 +205,13 @@ static void test_backspace(void)
 	type(e, "hi");
 	apply(e, EVENT_BACKSPACE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].texts[0].len == 1);
-	assert(strcmp(l.bands[0].texts[0].text, "h") == 0);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "h", INK);
+	assert_blank(g, 1, col + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -115,11 +221,12 @@ static void test_backspace_on_empty_is_noop(void)
 	apply(e, EVENT_ADD_BAND);
 	apply(e, EVENT_BACKSPACE);
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].texts[0].len == 0);
-	assert(l.caret_col == l.bands[0].texts[0].col);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_caret(g, 1, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -127,16 +234,23 @@ static void test_three_bands_stack_downwards(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
+	type(e, "a");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_SELECT_DOWN);
 
-	struct layout l = layout(e);
-	assert(l.count == 3);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[1].row == 2);
-	assert(l.bands[2].row == 3);
-	assert(l.bands[2].texts[0].row == l.bands[2].row);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[2].texts[0].row);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "c", INK);
+	assert_text(g, 2, col, "b", INK);
+	assert_text(g, 3, col, "a", INK);
+	assert_caret(g, 3, col + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -146,12 +260,24 @@ static void test_escape_and_enter_type_change_mode(void)
 	apply(e, EVENT_ADD_BAND);
 	assert(editor_mode(e) == MODE_TYPE);
 
+	struct grid *typing = frame(e);
+	assert_caret(typing, 1, (COLS - (int)strlen("")) / 2 + 1);
+
 	apply(e, EVENT_ESCAPE);
 	assert(editor_mode(e) == MODE_MOVE);
+
+	struct grid *moving = frame(e);
+	assert_no_caret(moving);
 
 	apply(e, EVENT_ENTER_TYPE);
 	assert(editor_mode(e) == MODE_TYPE);
 
+	struct grid *retyping = frame(e);
+	assert_caret(retyping, 1, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(typing);
+	grid_free(moving);
+	grid_free(retyping);
 	editor_free(e);
 }
 
@@ -161,10 +287,12 @@ static void test_select_up_moves_caret(void)
 	add_bands(e, 3);
 	apply(e, EVENT_SELECT_UP);
 
-	struct layout l = layout(e);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 2);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_caret(g, 2, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -177,10 +305,11 @@ static void test_select_up_at_top_stays(void)
 	apply(e, EVENT_SELECT_UP);
 	apply(e, EVENT_SELECT_UP);
 
-	struct layout l = layout(e);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 1);
+	struct grid *g = frame(e);
 
+	assert_caret(g, 1, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -193,10 +322,11 @@ static void test_select_down_at_bottom_stays(void)
 	apply(e, EVENT_SELECT_DOWN);
 	apply(e, EVENT_SELECT_DOWN);
 
-	struct layout l = layout(e);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 3);
+	struct grid *g = frame(e);
 
+	assert_caret(g, 3, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -207,10 +337,11 @@ static void test_select_down_moves_caret(void)
 	apply(e, EVENT_SELECT_UP);
 	apply(e, EVENT_SELECT_DOWN);
 
-	struct layout l = layout(e);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 3);
+	struct grid *g = frame(e);
 
+	assert_caret(g, 3, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -224,14 +355,17 @@ static void test_typing_after_select_up_edits_older_band(void)
 	apply(e, EVENT_SELECT_UP);
 	type(e, "X");
 
-	struct layout l = layout(e);
-	assert(l.count == 2);
-	assert(l.bands[0].texts[0].len == 4);
-	assert(strcmp(l.bands[0].texts[0].text, "newX") == 0);
-	assert(l.bands[1].texts[0].len == 3);
-	assert(strcmp(l.bands[1].texts[0].text, "old") == 0);
-	assert(l.caret_row == 1);
+	struct grid *g = frame(e);
 
+	int top = (COLS - (int)strlen("newX")) / 2 + 1;
+	int bottom = (COLS - (int)strlen("old")) / 2 + 1;
+	assert_text(g, 1, top, "newX", INK);
+	assert_blank(g, 1, top + 4);
+	assert_text(g, 2, bottom, "old", INK);
+	assert_blank(g, 2, bottom + 3);
+	assert_caret(g, 1, top + 4);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -244,15 +378,14 @@ static void test_delete_middle_of_three(void)
 	type(e, "b");
 	apply(e, EVENT_DELETE_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 2);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[1].row == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "") == 0);
-	assert(strcmp(l.bands[1].texts[0].text, "a") == 0);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 1);
+	struct grid *g = frame(e);
 
+	assert_row_blank(g, 1);
+	assert_text(g, 2, (COLS - 1) / 2 + 1, "a", INK);
+	assert_row_blank(g, 3);
+	assert_caret(g, 1, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -260,15 +393,26 @@ static void test_delete_top_band_selects_below(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
+	type(e, "a");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_SELECT_DOWN);
 	apply(e, EVENT_SELECT_UP);
 	apply(e, EVENT_SELECT_UP);
 	apply(e, EVENT_DELETE_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 2);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 1);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "b", INK);
+	assert_text(g, 2, col, "a", INK);
+	assert_row_blank(g, 3);
+	assert_caret(g, 1, col + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -278,10 +422,13 @@ static void test_delete_only_band(void)
 	apply(e, EVENT_ADD_BAND);
 	apply(e, EVENT_DELETE_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -290,10 +437,13 @@ static void test_delete_with_no_bands_is_noop(void)
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_DELETE_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -303,10 +453,13 @@ static void test_char_and_backspace_with_no_bands(void)
 	apply_ch(e, 'x');
 	apply(e, EVENT_BACKSPACE);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -316,10 +469,14 @@ static void test_quit_and_none_are_noops(void)
 	apply(e, EVENT_QUIT);
 	apply(e, EVENT_NONE);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
+	struct grid *g = frame(e);
+
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
 	assert(editor_mode(e) == MODE_MOVE);
 
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -327,18 +484,31 @@ static void test_clips_to_screen_rows(void)
 {
 	struct editor *e = fresh(COLS, 2);
 	add_bands(e, 3);
+	type(e, "a");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_SELECT_DOWN);
 
-	struct layout l = layout(e);
-	assert(l.count == 2);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[1].row == 2);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
+
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "c", INK);
+	assert_text(g, 2, col, "b", INK);
+	assert_no_caret(g);
+
+	grid_free(g);
 
 	apply(e, EVENT_SELECT_UP);
-	l = layout(e);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 2);
 
+	struct grid *moved = frame(e);
+
+	assert_text(moved, 2, col, "b", INK);
+	assert_caret(moved, 2, col + 1);
+
+	grid_free(moved);
 	editor_free(e);
 }
 
@@ -348,10 +518,14 @@ static void test_capacity_is_cols_minus_one(void)
 	apply(e, EVENT_ADD_BAND);
 	type(e, "abcdefghij");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].texts[0].len == 9);
-	assert(strcmp(l.bands[0].texts[0].text, "abcdefghi") == 0);
+	struct grid *g = frame(e);
 
+	int col = (10 - (int)strlen("abcdefghi")) / 2 + 1;
+	assert_text(g, 1, col, "abcdefghi", INK);
+	assert_blank(g, 1, 10);
+	assert_caret(g, 1, 10);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -359,15 +533,23 @@ static void test_toggle_makes_band_dim_then_normal(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
+	type(e, "ab");
 	apply(e, EVENT_TOGGLE_DIM);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].style.dim == 1);
+	struct grid *dimmed = frame(e);
+
+	int col = (COLS - 2) / 2 + 1;
+	assert_text(dimmed, 1, col, "ab", DIM);
+
+	grid_free(dimmed);
 
 	apply(e, EVENT_TOGGLE_DIM);
-	l = layout(e);
-	assert(l.bands[0].style.dim == 0);
 
+	struct grid *normal = frame(e);
+
+	assert_text(normal, 1, col, "ab", INK);
+
+	grid_free(normal);
 	editor_free(e);
 }
 
@@ -375,13 +557,23 @@ static void test_toggle_only_changes_highlighted_band(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
+	type(e, "a");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_SELECT_DOWN);
 	apply(e, EVENT_TOGGLE_DIM);
 
-	struct layout l = layout(e);
-	assert(l.bands[2].style.dim == 1);
-	assert(l.bands[0].style.dim == 0);
-	assert(l.bands[1].style.dim == 0);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "c", INK);
+	assert_text(g, 2, col, "b", INK);
+	assert_text(g, 3, col, "a", DIM);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -389,13 +581,19 @@ static void test_add_band_after_dim_is_normal_and_old_stays_dim(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 2);
+	type(e, "b");
 	apply(e, EVENT_TOGGLE_DIM);
 	apply(e, EVENT_ADD_BAND);
+	type(e, "c");
 
-	struct layout l = layout(e);
-	assert(l.bands[2].style.dim == 0);
-	assert(l.bands[1].style.dim == 1);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_row_blank(g, 1);
+	assert_text(g, 2, col, "b", DIM);
+	assert_text(g, 3, col, "c", INK);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -407,11 +605,14 @@ static void test_typing_into_dim_band_keeps_dim(void)
 	apply(e, EVENT_TOGGLE_DIM);
 	type(e, "cd");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].style.dim == 1);
-	assert(l.bands[0].texts[0].len == 4);
-	assert(strcmp(l.bands[0].texts[0].text, "abcd") == 0);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 4) / 2 + 1;
+	assert_text(g, 1, col, "abcd", DIM);
+	assert_blank(g, 1, col + 4);
+	assert_caret(g, 1, col + 4);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -420,9 +621,13 @@ static void test_toggle_with_no_bands_is_noop(void)
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_TOGGLE_DIM);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -435,6 +640,13 @@ static void test_toggle_does_not_change_mode(void)
 	apply(e, EVENT_TOGGLE_DIM);
 	assert(editor_mode(e) == MODE_TYPE);
 
+	struct grid *g = frame(e);
+
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, (COLS - (int)strlen("")) / 2 + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -442,21 +654,33 @@ static void test_grow_band_centres_text(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
+	type(e, "a");
+
+	struct grid *one = frame(e);
+
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(one, 1, col, "a", INK);
+	assert_caret(one, 1, col + 1);
+
+	grid_free(one);
+
 	apply(e, EVENT_GROW_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 2);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].texts[0].row);
+	struct grid *two = frame(e);
+
+	assert_text(two, 2, col, "a", INK);
+	assert_caret(two, 2, col + 1);
+
+	grid_free(two);
 
 	apply(e, EVENT_GROW_BAND);
-	l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 3);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].texts[0].row);
 
+	struct grid *three = frame(e);
+
+	assert_text(three, 3, col, "a", INK);
+	assert_caret(three, 3, col + 1);
+
+	grid_free(three);
 	editor_free(e);
 }
 
@@ -464,24 +688,34 @@ static void test_grow_middle_band_pushes_band_below(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
+	type(e, "a");
 	apply(e, EVENT_SELECT_UP);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
 	apply(e, EVENT_GROW_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 3);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[1].row == 3);
-	assert(l.bands[1].texts[0].row == l.bands[1].row);
-	assert(l.bands[2].row == 5);
+	struct grid *once = frame(e);
+
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(once, 1, col, "c", INK);
+	assert_text(once, 3, col, "b", INK);
+	assert_text(once, 5, col, "a", INK);
+	assert_caret(once, 3, col + 1);
+
+	grid_free(once);
 
 	apply(e, EVENT_GROW_BAND);
-	l = layout(e);
-	assert(l.count == 3);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[1].row == 4);
-	assert(l.bands[1].texts[0].row == l.bands[1].row);
-	assert(l.bands[2].row == 7);
 
+	struct grid *twice = frame(e);
+
+	assert_text(twice, 1, col, "c", INK);
+	assert_text(twice, 4, col, "b", INK);
+	assert_text(twice, 7, col, "a", INK);
+	assert_caret(twice, 4, col + 1);
+
+	grid_free(twice);
 	editor_free(e);
 }
 
@@ -489,14 +723,17 @@ static void test_grow_band_has_no_limit(void)
 {
 	struct editor *e = fresh(COLS, 40);
 	add_bands(e, 1);
+	type(e, "a");
 	for (int i = 0; i < 10; i++)
 		apply(e, EVENT_GROW_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 11);
-	assert(l.caret_row == 11);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 11, col, "a", INK);
+	assert_caret(g, 11, col + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -504,16 +741,19 @@ static void test_add_band_after_grow_is_one_line(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
+	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_ADD_BAND);
+	type(e, "b");
 
-	struct layout l = layout(e);
-	assert(l.count == 2);
-	assert(l.bands[0].row == 2);
-	assert(l.bands[1].row == 4);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 4);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 2, col, "a", INK);
+	assert_text(g, 4, col, "b", INK);
+	assert_caret(g, 4, col + 1);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -525,21 +765,23 @@ static void test_typing_into_grown_band_keeps_caret_middle(void)
 	apply(e, EVENT_GROW_BAND);
 	type(e, "c");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].texts[0].len == 3);
-	assert(strcmp(l.bands[0].texts[0].text, "abc") == 0);
-	assert(l.bands[0].row == 2);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.caret_row == l.bands[0].texts[0].row);
-	assert(l.caret_col == l.bands[0].texts[0].col + 3);
+	struct grid *three = frame(e);
+
+	int col = (COLS - 3) / 2 + 1;
+	assert_text(three, 2, col, "abc", INK);
+	assert_caret(three, 2, col + 3);
+
+	grid_free(three);
 
 	apply(e, EVENT_BACKSPACE);
-	l = layout(e);
-	assert(l.bands[0].texts[0].len == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "ab") == 0);
-	assert(l.caret_row == l.bands[0].texts[0].row);
-	assert(l.caret_col == l.bands[0].texts[0].col + 2);
 
+	struct grid *two = frame(e);
+
+	col = (COLS - 2) / 2 + 1;
+	assert_text(two, 2, col, "ab", INK);
+	assert_caret(two, 2, col + 2);
+
+	grid_free(two);
 	editor_free(e);
 }
 
@@ -548,10 +790,13 @@ static void test_grow_with_no_bands_is_noop(void)
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_GROW_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -565,6 +810,13 @@ static void test_grow_does_not_change_mode(void)
 	apply(e, EVENT_GROW_BAND);
 	assert(editor_mode(e) == MODE_MOVE);
 
+	struct grid *g = frame(e);
+
+	assert_bg_rows(g, 1, 3, HIGHLIGHT);
+	assert_bg_rows(g, 4, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -572,15 +824,22 @@ static void test_grow_clips_band_below_bottom(void)
 {
 	struct editor *e = fresh(COLS, 4);
 	add_bands(e, 1);
+	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_ADD_BAND);
+	type(e, "b");
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 3);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 3, col, "a", INK);
+	for (int row = 1; row <= e_rows; row++)
+		if (row != 3)
+			assert_row_blank(g, row);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -588,13 +847,17 @@ static void test_grow_clips_band_with_only_padding_visible(void)
 {
 	struct editor *e = fresh(COLS, 4);
 	add_bands(e, 1);
+	type(e, "a");
 	for (int i = 0; i < 4; i++)
 		apply(e, EVENT_GROW_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, 4, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -602,23 +865,27 @@ static void test_shrink_band_centres_text_again(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
+	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_SHRINK_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 2);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 2);
+	struct grid *shrunk = frame(e);
+
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(shrunk, 2, col, "a", INK);
+	assert_caret(shrunk, 2, col + 1);
+
+	grid_free(shrunk);
 
 	apply(e, EVENT_SHRINK_BAND);
-	l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 1);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == 1);
 
+	struct grid *plain = frame(e);
+
+	assert_text(plain, 1, col, "a", INK);
+	assert_caret(plain, 1, col + 1);
+
+	grid_free(plain);
 	editor_free(e);
 }
 
@@ -626,19 +893,25 @@ static void test_shrink_one_line_band_stays_one_line(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
+	type(e, "a");
 	apply(e, EVENT_SHRINK_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 1);
-	assert(l.caret_row == 1);
+	struct grid *same = frame(e);
+
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(same, 1, col, "a", INK);
+	assert_caret(same, 1, col + 1);
+
+	grid_free(same);
 
 	apply(e, EVENT_GROW_BAND);
-	l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 2);
-	assert(l.caret_row == 2);
 
+	struct grid *grown = frame(e);
+
+	assert_text(grown, 2, col, "a", INK);
+	assert_caret(grown, 2, col + 1);
+
+	grid_free(grown);
 	editor_free(e);
 }
 
@@ -646,17 +919,24 @@ static void test_shrink_middle_band_pulls_band_below_up(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
+	type(e, "a");
 	apply(e, EVENT_SELECT_UP);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_SHRINK_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 3);
-	assert(l.bands[0].row == 1);
-	assert(l.bands[1].row == 3);
-	assert(l.bands[2].row == 5);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "c", INK);
+	assert_text(g, 3, col, "b", INK);
+	assert_text(g, 5, col, "a", INK);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -664,27 +944,26 @@ static void test_grow_then_shrink_restores_layout(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
+	type(e, "a");
 	apply(e, EVENT_SELECT_UP);
-	struct layout before = layout(e);
+	type(e, "b");
+	apply(e, EVENT_SELECT_UP);
+	type(e, "c");
+	apply(e, EVENT_SELECT_DOWN);
+
+	struct grid *before = frame(e);
 
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_SHRINK_BAND);
 	apply(e, EVENT_SHRINK_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == before.count);
-	for (int i = 0; i < before.count; i++) {
-		assert(l.bands[i].row == before.bands[i].row);
-		assert(l.bands[i].texts[0].row == before.bands[i].texts[0].row);
-		assert(l.bands[i].texts[0].col == before.bands[i].texts[0].col);
-		assert(strcmp(l.bands[i].texts[0].text,
-			      before.bands[i].texts[0].text) == 0);
-	}
-	assert(l.caret_visible == before.caret_visible);
-	assert(l.caret_row == before.caret_row);
-	assert(l.caret_col == before.caret_col);
+	struct grid *after = frame(e);
 
+	assert_same_frame(before, after);
+
+	grid_free(before);
+	grid_free(after);
 	editor_free(e);
 }
 
@@ -698,13 +977,13 @@ static void test_typing_into_shrunk_band_keeps_caret_middle(void)
 	apply(e, EVENT_SHRINK_BAND);
 	type(e, "c");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].texts[0].len == 3);
-	assert(strcmp(l.bands[0].texts[0].text, "abc") == 0);
-	assert(l.bands[0].row == 2);
-	assert(l.caret_row == 2);
-	assert(l.caret_col == l.bands[0].texts[0].col + 3);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 3) / 2 + 1;
+	assert_text(g, 2, col, "abc", INK);
+	assert_caret(g, 2, col + 3);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -713,10 +992,13 @@ static void test_shrink_with_no_bands_is_noop(void)
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_SHRINK_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -730,6 +1012,13 @@ static void test_shrink_does_not_change_mode(void)
 	apply(e, EVENT_SHRINK_BAND);
 	assert(editor_mode(e) == MODE_MOVE);
 
+	struct grid *g = frame(e);
+
+	assert_bg_rows(g, 1, 1, HIGHLIGHT);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -737,21 +1026,31 @@ static void test_shrink_brings_clipped_band_back(void)
 {
 	struct editor *e = fresh(COLS, 4);
 	add_bands(e, 1);
+	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_ADD_BAND);
+	type(e, "b");
 
-	struct layout l = layout(e);
-	assert(l.count == 1);
-	assert(l.bands[0].row == 3);
+	struct grid *clipped = frame(e);
+
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(clipped, 3, col, "a", INK);
+	assert_row_blank(clipped, 4);
+	assert_no_caret(clipped);
+
+	grid_free(clipped);
 
 	apply(e, EVENT_SELECT_UP);
 	apply(e, EVENT_SHRINK_BAND);
-	l = layout(e);
-	assert(l.count == 2);
-	assert(l.bands[0].row == 2);
-	assert(l.bands[1].row == 4);
 
+	struct grid *back = frame(e);
+
+	assert_text(back, 2, col, "a", INK);
+	assert_text(back, 4, col, "b", INK);
+	assert_caret(back, 2, col + 1);
+
+	grid_free(back);
 	editor_free(e);
 }
 
@@ -761,11 +1060,14 @@ static void test_move_mode_highlights_selected_and_hides_caret(void)
 	add_bands(e, 3);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.count == 3);
-	assert(l.bands[2].style.highlight == 1);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_bg_rows(g, 3, 3, HIGHLIGHT);
+	assert_bg_rows(g, 1, 2, CANVAS);
+	assert_bg_rows(g, 4, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -780,12 +1082,32 @@ static void test_band_carries_its_own_pad(void)
 	apply(e, EVENT_SELECT_UP);
 	apply(e, EVENT_GROW_BAND);
 
-	struct layout l = layout(e);
-	assert(l.count == 3);
-	assert(l.bands[0].pad == 1);
-	assert(l.bands[1].pad == 2);
-	assert(l.bands[2].pad == 0);
+	struct grid *first = frame(e);
 
+	assert_bg_rows(first, 1, 3, HIGHLIGHT);
+	assert_bg_rows(first, 4, ROWS, CANVAS);
+
+	grid_free(first);
+
+	apply(e, EVENT_SELECT_DOWN);
+
+	struct grid *second = frame(e);
+
+	assert_bg_rows(second, 4, 8, HIGHLIGHT);
+	assert_bg_rows(second, 1, 3, CANVAS);
+	assert_bg_rows(second, 9, ROWS, CANVAS);
+
+	grid_free(second);
+
+	apply(e, EVENT_SELECT_DOWN);
+
+	struct grid *third = frame(e);
+
+	assert_bg_rows(third, 9, 9, HIGHLIGHT);
+	assert_bg_rows(third, 1, 8, CANVAS);
+	assert_bg_rows(third, 10, ROWS, CANVAS);
+
+	grid_free(third);
 	editor_free(e);
 }
 
@@ -795,11 +1117,13 @@ static void test_only_selected_band_is_highlighted(void)
 	add_bands(e, 3);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].style.highlight == 0);
-	assert(l.bands[1].style.highlight == 0);
-	assert(l.bands[2].style.highlight == 1);
+	struct grid *g = frame(e);
 
+	assert_bg_rows(g, 3, 3, HIGHLIGHT);
+	assert_bg_rows(g, 1, 2, CANVAS);
+	assert_bg_rows(g, 4, ROWS, CANVAS);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -808,17 +1132,32 @@ static void test_highlight_moves_with_selection(void)
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 3);
 	apply(e, EVENT_ESCAPE);
+
+	struct grid *bottom = frame(e);
+
+	assert_bg_rows(bottom, 3, 3, HIGHLIGHT);
+	assert_bg_rows(bottom, 1, 2, CANVAS);
+
+	grid_free(bottom);
+
 	apply(e, EVENT_SELECT_UP);
 
-	struct layout l = layout(e);
-	assert(l.bands[2].style.highlight == 0);
-	assert(l.bands[1].style.highlight == 1);
+	struct grid *middle = frame(e);
+
+	assert_bg_rows(middle, 2, 2, HIGHLIGHT);
+	assert_bg_rows(middle, 1, 1, CANVAS);
+	assert_bg_rows(middle, 3, ROWS, CANVAS);
+
+	grid_free(middle);
 
 	apply(e, EVENT_SELECT_DOWN);
-	l = layout(e);
-	assert(l.bands[1].style.highlight == 0);
-	assert(l.bands[2].style.highlight == 1);
 
+	struct grid *back = frame(e);
+
+	assert_bg_rows(back, 3, 3, HIGHLIGHT);
+	assert_bg_rows(back, 1, 2, CANVAS);
+
+	grid_free(back);
 	editor_free(e);
 }
 
@@ -826,13 +1165,18 @@ static void test_dim_selected_band_is_highlighted(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
 	add_bands(e, 1);
+	type(e, "a");
 	apply(e, EVENT_TOGGLE_DIM);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].style.dim == 1);
-	assert(l.bands[0].style.highlight == 1);
+	struct grid *g = frame(e);
 
+	int col = (COLS - 1) / 2 + 1;
+	assert_text(g, 1, col, "a", DIM);
+	assert_bg_rows(g, 1, 1, HIGHLIGHT);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -842,10 +1186,14 @@ static void test_empty_selected_band_is_highlighted(void)
 	add_bands(e, 1);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].texts[0].len == 0);
-	assert(l.bands[0].style.highlight == 1);
+	struct grid *g = frame(e);
 
+	assert_bg_rows(g, 1, 1, HIGHLIGHT);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_row_blank(g, 1);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -855,25 +1203,33 @@ static void test_type_mode_has_no_highlight_and_visible_caret(void)
 	apply(e, EVENT_ADD_BAND);
 	type(e, "ab");
 
-	struct layout typed = layout(e);
-	assert(typed.count == 1);
-	assert(typed.bands[0].style.highlight == 0);
-	assert(typed.caret_visible == 1);
-	assert(typed.caret_row == typed.bands[0].texts[0].row);
-	assert(typed.caret_col == typed.bands[0].texts[0].col + 2);
+	int col = (COLS - 2) / 2 + 1;
+
+	struct grid *typed = frame(e);
+
+	assert_bg_rows(typed, 1, ROWS, CANVAS);
+	assert_text(typed, 1, col, "ab", INK);
+	assert_caret(typed, 1, col + 2);
+
+	grid_free(typed);
 
 	apply(e, EVENT_ESCAPE);
-	struct layout moved = layout(e);
-	assert(moved.bands[0].style.highlight == 1);
-	assert(moved.caret_visible == 0);
+
+	struct grid *moved = frame(e);
+
+	assert_bg_rows(moved, 1, 1, HIGHLIGHT);
+	assert_no_caret(moved);
+
+	grid_free(moved);
 
 	apply(e, EVENT_ENTER_TYPE);
-	struct layout retyped = layout(e);
-	assert(retyped.bands[0].style.highlight == 0);
-	assert(retyped.caret_visible == 1);
-	assert(retyped.caret_row == typed.caret_row);
-	assert(retyped.caret_col == typed.caret_col);
 
+	struct grid *retyped = frame(e);
+
+	assert_bg_rows(retyped, 1, ROWS, CANVAS);
+	assert_caret(retyped, 1, col + 2);
+
+	grid_free(retyped);
 	editor_free(e);
 }
 
@@ -885,18 +1241,16 @@ static void test_add_text_moves_old_text_left_and_types_on_the_right(void)
 	apply(e, EVENT_ESCAPE);
 	apply(e, EVENT_ADD_TEXT);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].count == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
-	assert(l.bands[0].texts[0].col == 3);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.bands[0].texts[1].len == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].texts[1].row);
-	assert(l.caret_col == l.bands[0].texts[1].col);
-	assert(l.bands[0].style.highlight == 0);
+	struct grid *g = frame(e);
 
+	int right = COLS - (int)strlen("") - 1;
+	assert_text(g, 1, 3, "Login", INK);
+	assert_blank(g, 1, 8);
+	assert_blank(g, 1, right);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, right);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -909,13 +1263,15 @@ static void test_typed_text_on_the_right_is_right_aligned(void)
 	apply(e, EVENT_ADD_TEXT);
 	type(e, "Logout");
 
-	struct layout l = layout(e);
-	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
-	assert(l.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.caret_row == l.bands[0].texts[1].row);
-	assert(l.caret_col == l.bands[0].texts[1].col + 6);
+	struct grid *g = frame(e);
 
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", INK);
+	assert_text(g, 1, right, "Logout", INK);
+	assert_blank(g, 1, right + 6);
+	assert_caret(g, 1, right + 6);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -932,15 +1288,16 @@ static void test_add_text_on_a_band_with_two_texts_is_a_noop(void)
 
 	assert(editor_mode(e) == MODE_MOVE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].count == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
-	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.bands[0].style.highlight == 1);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", INK);
+	assert_text(g, 1, right, "Logout", INK);
+	assert_bg_rows(g, 1, 1, HIGHLIGHT);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -951,10 +1308,13 @@ static void test_add_text_with_no_bands_is_a_noop(void)
 
 	assert(editor_mode(e) == MODE_MOVE);
 
-	struct layout l = layout(e);
-	assert(l.count == 0);
-	assert(l.caret_visible == 0);
+	struct grid *g = frame(e);
 
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -965,23 +1325,28 @@ static void test_add_text_on_an_empty_text(void)
 	apply(e, EVENT_ESCAPE);
 	apply(e, EVENT_ADD_TEXT);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].count == 2);
-	assert(l.bands[0].texts[0].len == 0);
-	assert(l.bands[0].texts[0].col == 3);
-	assert(l.bands[0].texts[1].len == 0);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].texts[1].row);
-	assert(l.caret_col == l.bands[0].texts[1].col);
+	int empty_right = COLS - (int)strlen("") - 1;
+
+	struct grid *both_empty = frame(e);
+
+	assert_all_blank(both_empty);
+	assert_bg_rows(both_empty, 1, ROWS, CANVAS);
+	assert_blank(both_empty, 1, 3);
+	assert_blank(both_empty, 1, empty_right);
+	assert_caret(both_empty, 1, empty_right);
+
+	grid_free(both_empty);
 
 	type(e, "Logout");
-	l = layout(e);
-	assert(l.bands[0].texts[0].len == 0);
-	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
 
+	struct grid *typed = frame(e);
+
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_blank(typed, 1, 3);
+	assert_text(typed, 1, right, "Logout", INK);
+	assert_caret(typed, 1, empty_right);
+
+	grid_free(typed);
 	editor_free(e);
 }
 
@@ -994,16 +1359,16 @@ static void test_escape_right_after_add_text_keeps_empty_right_text(void)
 	apply(e, EVENT_ADD_TEXT);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].count == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
-	assert(l.bands[0].texts[0].col == 3);
-	assert(l.bands[0].texts[1].len == 0);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.caret_visible == 0);
-	assert(l.bands[0].style.highlight == 1);
+	struct grid *g = frame(e);
 
+	assert_text(g, 1, 3, "Login", INK);
+	assert_blank(g, 1, 8);
+	assert_blank(g, 1, COLS - (int)strlen("") - 1);
+	assert_bg_rows(g, 1, 1, HIGHLIGHT);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1019,14 +1384,15 @@ static void test_enter_type_on_two_texts_types_into_the_right_one(void)
 	apply(e, EVENT_ENTER_TYPE);
 	type(e, "gout");
 
-	struct layout l = layout(e);
-	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
-	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].texts[1].row);
-	assert(l.caret_col == l.bands[0].texts[1].col + 6);
+	struct grid *g = frame(e);
 
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", INK);
+	assert_text(g, 1, right, "Logout", INK);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, right + 6);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1038,12 +1404,14 @@ static void test_single_text_in_a_tall_band_stays_on_the_band_row(void)
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].pad == 1);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.bands[0].texts[0].col ==
-	       (COLS - (int)strlen("Login")) / 2 + 1);
+	struct grid *g = frame(e);
 
+	assert_text(g, 2, (COLS - (int)strlen("Login")) / 2 + 1, "Login", INK);
+	assert_bg_rows(g, 1, 3, HIGHLIGHT);
+	assert_bg_rows(g, 4, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1056,14 +1424,15 @@ static void test_two_texts_on_a_one_line_band_stay_side_by_side(void)
 	apply(e, EVENT_ADD_TEXT);
 	type(e, "Logout");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].pad == 0);
-	assert(l.bands[0].count == 2);
-	assert(l.bands[0].texts[0].row == l.bands[0].row);
-	assert(l.bands[0].texts[0].col == 3);
-	assert(l.bands[0].texts[1].row == l.bands[0].row);
-	assert(l.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
+	struct grid *g = frame(e);
 
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", INK);
+	assert_text(g, 1, right, "Logout", INK);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, right + 6);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1076,19 +1445,17 @@ static void test_add_text_on_a_tall_band_stacks_the_texts(void)
 	apply(e, EVENT_ESCAPE);
 	apply(e, EVENT_ADD_TEXT);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].pad == 1);
-	assert(l.bands[0].count == 2);
-	assert(l.bands[0].texts[0].row == l.bands[0].row - 1);
-	assert(l.bands[0].texts[0].col ==
-	       (COLS - (int)strlen("Login")) / 2 + 1);
-	assert(l.bands[0].texts[1].len == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
-	assert(l.bands[0].texts[1].col == (COLS - 0) / 2 + 1);
-	assert(editor_mode(e) == MODE_TYPE);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].row + 1);
+	struct grid *g = frame(e);
 
+	int top = (COLS - (int)strlen("Login")) / 2 + 1;
+	int bottom = (COLS - (int)strlen("")) / 2 + 1;
+	assert_text(g, 1, top, "Login", INK);
+	assert_blank(g, 3, bottom);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 3, bottom);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1103,15 +1470,14 @@ static void test_typed_text_on_a_tall_band_is_centred_below(void)
 	apply(e, EVENT_ADD_TEXT);
 	type(e, "Logout");
 
-	struct layout l = layout(e);
-	assert(l.bands[0].pad == 2);
-	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
-	assert(l.bands[0].texts[1].col ==
-	       (COLS - (int)strlen("Logout")) / 2 + 1);
-	assert(l.caret_row == l.bands[0].row + 1);
-	assert(l.caret_col == l.bands[0].texts[1].col + (int)strlen("Logout"));
+	struct grid *g = frame(e);
 
+	assert_text(g, 2, (COLS - (int)strlen("Login")) / 2 + 1, "Login", INK);
+	assert_text(g, 4, (COLS - (int)strlen("Logout")) / 2 + 1, "Logout",
+		    INK);
+	assert_caret(g, 4, (COLS - (int)strlen("Logout")) / 2 + 1 + 6);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1126,15 +1492,15 @@ test_escape_right_after_add_text_on_a_tall_band_keeps_empty_bottom_text(void)
 	apply(e, EVENT_ADD_TEXT);
 	apply(e, EVENT_ESCAPE);
 
-	struct layout l = layout(e);
-	assert(l.bands[0].count == 2);
-	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
-	assert(l.bands[0].texts[0].row == l.bands[0].row - 1);
-	assert(l.bands[0].texts[1].len == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
-	assert(l.caret_visible == 0);
-	assert(l.bands[0].style.highlight == 1);
+	struct grid *g = frame(e);
 
+	assert_text(g, 1, (COLS - (int)strlen("Login")) / 2 + 1, "Login", INK);
+	assert_blank(g, 3, (COLS - (int)strlen("")) / 2 + 1);
+	assert_bg_rows(g, 1, 3, HIGHLIGHT);
+	assert_bg_rows(g, 4, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1151,14 +1517,15 @@ static void test_enter_type_on_a_stacked_band_types_into_the_bottom_text(void)
 	apply(e, EVENT_ENTER_TYPE);
 	type(e, "gout");
 
-	struct layout l = layout(e);
-	assert(strcmp(l.bands[0].texts[0].text, "Login") == 0);
-	assert(strcmp(l.bands[0].texts[1].text, "Logout") == 0);
-	assert(l.bands[0].texts[1].row == l.bands[0].row + 1);
-	assert(l.caret_visible == 1);
-	assert(l.caret_row == l.bands[0].row + 1);
-	assert(l.caret_col == l.bands[0].texts[1].col + (int)strlen("Logout"));
+	struct grid *g = frame(e);
 
+	int bottom = (COLS - (int)strlen("Logout")) / 2 + 1;
+	assert_text(g, 1, (COLS - (int)strlen("Login")) / 2 + 1, "Login", INK);
+	assert_text(g, 3, bottom, "Logout", INK);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 3, bottom + 6);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -1172,38 +1539,40 @@ static void test_growing_and_shrinking_flips_the_arrangement(void)
 	type(e, "Logout");
 	apply(e, EVENT_ESCAPE);
 
-	struct layout side_by_side = layout(e);
-	assert(side_by_side.bands[0].pad == 0);
-	assert(side_by_side.bands[0].texts[0].row == side_by_side.bands[0].row);
-	assert(side_by_side.bands[0].texts[0].col == 3);
-	assert(side_by_side.bands[0].texts[1].row == side_by_side.bands[0].row);
-	assert(side_by_side.bands[0].texts[1].col ==
-	       COLS - (int)strlen("Logout") - 1);
+	int side_by_side_left = 3;
+	int side_by_side_right = COLS - (int)strlen("Logout") - 1;
+	int stacked = (COLS - (int)strlen("Logout")) / 2 + 1;
+
+	struct grid *side_by_side = frame(e);
+
+	assert_text(side_by_side, 1, side_by_side_left, "Login", INK);
+	assert_text(side_by_side, 1, side_by_side_right, "Logout", INK);
+	assert_bg_rows(side_by_side, 1, 1, HIGHLIGHT);
+	assert_no_caret(side_by_side);
+
+	grid_free(side_by_side);
 
 	apply(e, EVENT_GROW_BAND);
 
-	struct layout stacked = layout(e);
-	assert(stacked.bands[0].pad == 1);
-	assert(strcmp(stacked.bands[0].texts[0].text, "Login") == 0);
-	assert(strcmp(stacked.bands[0].texts[1].text, "Logout") == 0);
-	assert(stacked.bands[0].texts[0].row == stacked.bands[0].row - 1);
-	assert(stacked.bands[0].texts[0].col ==
-	       (COLS - (int)strlen("Login")) / 2 + 1);
-	assert(stacked.bands[0].texts[1].row == stacked.bands[0].row + 1);
-	assert(stacked.bands[0].texts[1].col ==
-	       (COLS - (int)strlen("Logout")) / 2 + 1);
+	struct grid *stacked_frame = frame(e);
+
+	assert_text(stacked_frame, 1, stacked, "Login", INK);
+	assert_text(stacked_frame, 3, stacked, "Logout", INK);
+	assert_bg_rows(stacked_frame, 1, 3, HIGHLIGHT);
+	assert_no_caret(stacked_frame);
+
+	grid_free(stacked_frame);
 
 	apply(e, EVENT_SHRINK_BAND);
 
-	struct layout back = layout(e);
-	assert(back.bands[0].pad == 0);
-	assert(strcmp(back.bands[0].texts[0].text, "Login") == 0);
-	assert(strcmp(back.bands[0].texts[1].text, "Logout") == 0);
-	assert(back.bands[0].texts[0].row == back.bands[0].row);
-	assert(back.bands[0].texts[0].col == 3);
-	assert(back.bands[0].texts[1].row == back.bands[0].row);
-	assert(back.bands[0].texts[1].col == COLS - (int)strlen("Logout") - 1);
+	struct grid *back = frame(e);
 
+	assert_text(back, 1, side_by_side_left, "Login", INK);
+	assert_text(back, 1, side_by_side_right, "Logout", INK);
+	assert_bg_rows(back, 1, 1, HIGHLIGHT);
+	assert_no_caret(back);
+
+	grid_free(back);
 	editor_free(e);
 }
 
