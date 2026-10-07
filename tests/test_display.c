@@ -123,6 +123,96 @@ static struct editor *bands_with_text(int n)
 	return e;
 }
 
+static int count_borders(const struct display_list *dl)
+{
+	int n = 0;
+
+	for (int i = 0; i < dl->count; i++)
+		if (dl->ops[i].kind == OP_BORDER)
+			n++;
+
+	return n;
+}
+
+static void test_box_emits_a_border_and_its_text_inside_it(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	struct node *box = (struct node *)editor_selected(e);
+	text_buffer_insert(&box->data.text, 'x');
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	struct rect inner = {box->box.row + 1, box->box.col + 1, 1, 1};
+	int border = -1;
+
+	for (int i = 0; i < dl.count; i++)
+		if (dl.ops[i].kind == OP_BORDER)
+			border = i;
+
+	assert(border >= 0);
+	assert(count_borders(&dl) == 1);
+	assert_rect(dl.ops[border].rect, box->box);
+	assert(dl.ops[border].colour == INK);
+	assert(find_text(&dl, inner) > border);
+
+	editor_free(e);
+}
+
+static void test_text_children_emit_no_border(void)
+{
+	struct editor *e = bands_with_text(2);
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	assert(count_borders(&dl) == 0);
+
+	editor_free(e);
+}
+
+static void test_selected_box_highlight_precedes_its_border(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *box = editor_selected(e);
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	int fill = find_fill(&dl, box->box, HIGHLIGHT);
+
+	assert(fill >= 0);
+	for (int i = 0; i < fill; i++)
+		assert(dl.ops[i].kind != OP_BORDER);
+
+	editor_free(e);
+}
+
+static void test_dim_band_border_is_dim(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_TOGGLE_DIM);
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	for (int i = 0; i < dl.count; i++)
+		if (dl.ops[i].kind == OP_BORDER)
+			assert(dl.ops[i].colour == DIM);
+
+	assert(count_borders(&dl) == 1);
+
+	editor_free(e);
+}
+
 static void test_root_fill_is_the_first_op(void)
 {
 	struct editor *e = bands_with_text(1);
@@ -585,6 +675,10 @@ static void test_a_smaller_tree_after_a_capped_one_starts_from_scratch(void)
 
 int main(void)
 {
+	test_box_emits_a_border_and_its_text_inside_it();
+	test_text_children_emit_no_border();
+	test_selected_box_highlight_precedes_its_border();
+	test_dim_band_border_is_dim();
 	test_root_fill_is_the_first_op();
 	test_empty_tree_is_only_the_root_fill();
 	test_band_fill_precedes_its_own_texts();

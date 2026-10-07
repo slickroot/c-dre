@@ -2579,6 +2579,89 @@ static void test_add_boxes_have_no_cap(void)
 	editor_free(e);
 }
 
+static struct node *band_with_login_selected(struct editor *e)
+{
+	next_band(e);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	return editor_selected(e);
+}
+
+static void test_added_box_border_is_drawn_right_of_the_text(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	band_with_login_selected(e);
+	apply(e, EVENT_ADD_BAND);
+
+	struct grid *g = frame(e);
+	const struct node *box = editor_selected(e);
+	int right = box->box.col + box->box.cols - 1;
+	int bottom = box->box.row + box->box.rows - 1;
+
+	assert(box->box.col > (COLS - (int)strlen("Login")) / 2 + 1 + 5);
+	assert_text(g, 2, (COLS - 5) / 2 + 1, "Login", INK);
+	assert(cell(g, box->box.row, box->box.col)->ch == BORDER_CORNER);
+	assert(cell(g, box->box.row, right)->ch == BORDER_CORNER);
+	assert(cell(g, bottom, box->box.col)->ch == BORDER_CORNER);
+	assert(cell(g, bottom, right)->ch == BORDER_CORNER);
+	assert(cell(g, box->box.row + 1, box->box.col)->ch == BORDER_VERTICAL);
+	assert(cell(g, box->box.row + 1, right)->ch == BORDER_VERTICAL);
+	assert(cell(g, box->box.row, box->box.col)->fg == INK);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_added_box_is_highlighted_and_login_is_not(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	band_with_login_selected(e);
+	apply(e, EVENT_ADD_BAND);
+
+	struct grid *g = frame(e);
+	const struct node *box = editor_selected(e);
+
+	assert_bg(g, box->box.row + 1, box->box.col + 1, HIGHLIGHT);
+	assert_bg(g, 2, (COLS - 5) / 2 + 1, CANVAS);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_dimmed_band_draws_its_box_border_dim(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	band_with_login_selected(e);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct grid *g = frame(e);
+	const struct node *box = editor_root(e)->first_child->last_child;
+
+	assert(cell(g, box->box.row, box->box.col)->fg == DIM);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_second_box_border_follows_the_first(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	struct node *band = band_with_login_selected(e);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_ADD_BAND);
+
+	struct grid *g = frame(e);
+
+	for (struct node *c = band->first_child->next; c; c = c->next)
+		assert(cell(g, c->box.row, c->box.col)->ch == BORDER_CORNER);
+
+	grid_free(g);
+	editor_free(e);
+}
+
 static void test_add_on_box_is_noop(void)
 {
 	struct editor *e = fresh(COLS, ROWS);
@@ -2635,6 +2718,10 @@ int main(void)
 	test_add_on_band_appends_selected_box();
 	test_add_on_band_keeps_move_mode();
 	test_add_boxes_have_no_cap();
+	test_added_box_border_is_drawn_right_of_the_text();
+	test_added_box_is_highlighted_and_login_is_not();
+	test_dimmed_band_draws_its_box_border_dim();
+	test_second_box_border_follows_the_first();
 	test_add_on_box_is_noop();
 	test_add_on_text_is_noop();
 	test_add_text_on_band_with_box_still_capped();

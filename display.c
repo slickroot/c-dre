@@ -5,6 +5,8 @@
 #include "editor.h"
 #include "node.h"
 
+#define BORDER_THICKNESS 1
+
 static const uint32_t canvas = 0x0A0A0Bu;
 static const uint32_t ink = 0xC9C9CFu;
 static const uint32_t dim = 0x6B6B73u;
@@ -50,8 +52,19 @@ void display_list(const struct editor *e, struct display_list *out)
 			if (text == selected && editor_mode(e) == MODE_MOVE)
 				emit(out, OP_FILL, text->box, NULL, highlight);
 
-			emit(out, OP_TEXT, text->box, text->data.text.data,
-			     text->data.style.dim ? dim : ink);
+			uint32_t colour = text->data.style.dim ? dim : ink;
+			struct rect text_rect = text->box;
+
+			if (text->data.style.border) {
+				emit(out, OP_BORDER, text->box, NULL, colour);
+				text_rect.row += BORDER_THICKNESS;
+				text_rect.col += BORDER_THICKNESS;
+				text_rect.rows = 1;
+				text_rect.cols = text->data.text.len;
+			}
+
+			emit(out, OP_TEXT, text_rect, text->data.text.data,
+			     colour);
 		}
 
 		if (band == selected && editor_mode(e) == MODE_TYPE) {
