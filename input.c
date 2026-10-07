@@ -33,6 +33,12 @@ struct key_event input_parse(char byte, enum app_mode mode)
 		if (byte == '[')
 			return (struct key_event){EVENT_SHRINK_BAND, 0};
 
+		if (byte == 0x0d || byte == 0x0a)
+			return (struct key_event){EVENT_STEP_IN, 0};
+
+		if (byte == 0x7f || byte == 0x08)
+			return (struct key_event){EVENT_STEP_OUT, 0};
+
 		return (struct key_event){EVENT_NONE, 0};
 	}
 
