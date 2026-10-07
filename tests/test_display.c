@@ -30,6 +30,23 @@ static void type(struct editor *e, const char *s)
 			     (struct key_event){.type = EVENT_CHAR, .ch = *s});
 }
 
+static void next_band(struct editor *e)
+{
+	if (!editor_selected(e)) {
+		apply(e, EVENT_ADD_BAND);
+		return;
+	}
+
+	struct node *band = node_new();
+	struct node *text = node_new();
+	assert(band && text);
+	text_buffer_init(&text->data.text, COLS - 1);
+	node_append(band, text);
+	node_append(editor_root(e), band);
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_ENTER_TYPE);
+}
+
 static struct editor *fresh(int cols, int rows)
 {
 	struct editor *e = editor_new(cols, rows);
@@ -100,7 +117,7 @@ static struct editor *bands_with_text(int n)
 	struct editor *e = fresh(COLS, ROWS);
 
 	for (int i = 0; i < n; i++) {
-		apply(e, EVENT_ADD_BAND);
+		next_band(e);
 		type(e, "ab");
 	}
 	return e;
@@ -432,7 +449,7 @@ static void test_caret_moves_with_the_selection(void)
 
 	apply(e, EVENT_ESCAPE);
 	apply(e, EVENT_ESCAPE);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "c");
 	apply(e, EVENT_SELECT_UP);
 
@@ -481,7 +498,7 @@ static void test_clips_a_padded_band_whose_text_row_is_past_the_screen(void)
 	apply(e, EVENT_ADD_BAND);
 	type(e, "a");
 	apply(e, EVENT_ESCAPE);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	for (int i = 0; i < 4; i++)
 		apply(e, EVENT_GROW_BAND);
 
@@ -506,7 +523,7 @@ static void test_op_count_matches_the_tree_when_it_fits(void)
 	struct editor *e = fresh(COLS, BIG_ROWS);
 
 	for (int i = 0; i < 8; i++) {
-		apply(e, EVENT_ADD_BAND);
+		next_band(e);
 		apply(e, EVENT_ADD_TEXT);
 	}
 	apply(e, EVENT_ESCAPE);
@@ -526,7 +543,7 @@ static void test_count_never_exceeds_max_ops(void)
 	struct editor *e = fresh(COLS, BIG_ROWS);
 
 	for (int i = 0; i < BIG_BANDS; i++) {
-		apply(e, EVENT_ADD_BAND);
+		next_band(e);
 		apply(e, EVENT_ADD_TEXT);
 	}
 	apply(e, EVENT_ESCAPE);
@@ -547,7 +564,7 @@ static void test_a_smaller_tree_after_a_capped_one_starts_from_scratch(void)
 	struct editor *big = fresh(COLS, BIG_ROWS);
 
 	for (int i = 0; i < BIG_BANDS; i++) {
-		apply(big, EVENT_ADD_BAND);
+		next_band(big);
 		apply(big, EVENT_ADD_TEXT);
 	}
 	apply(big, EVENT_ESCAPE);

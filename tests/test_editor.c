@@ -4,10 +4,12 @@
 #include "editor.h"
 #include "grid.h"
 #include "layout.h"
+#include "node.h"
 #include "paint.h"
 
 #define COLS 40
 #define ROWS 40
+#define MANY_BOXES 4
 
 #define CANVAS 0x0A0A0Bu
 #define INK 0xC9C9CFu
@@ -39,10 +41,27 @@ static void type(struct editor *e, const char *s)
 		apply_ch(e, *s);
 }
 
+static void next_band(struct editor *e)
+{
+	if (!editor_selected(e)) {
+		apply(e, EVENT_ADD_BAND);
+		return;
+	}
+
+	struct node *band = node_new();
+	struct node *text = node_new();
+	assert(band && text);
+	text_buffer_init(&text->data.text, e_cols - 1);
+	node_append(band, text);
+	node_append(editor_root(e), band);
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_ENTER_TYPE);
+}
+
 static void add_bands(struct editor *e, int n)
 {
 	for (int i = 0; i < n; i++)
-		apply(e, EVENT_ADD_BAND);
+		next_band(e);
 }
 
 static struct editor *fresh(int cols, int rows)
@@ -356,7 +375,7 @@ static void test_typing_after_select_up_edits_older_band(void)
 	struct editor *e = fresh(COLS, ROWS);
 	apply(e, EVENT_ADD_BAND);
 	type(e, "new");
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "old");
 	apply(e, EVENT_SELECT_UP);
 	type(e, "X");
@@ -589,7 +608,7 @@ static void test_add_band_after_dim_is_normal_and_old_stays_dim(void)
 	add_bands(e, 2);
 	type(e, "b");
 	apply(e, EVENT_TOGGLE_DIM);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "c");
 
 	struct grid *g = frame(e);
@@ -749,7 +768,7 @@ static void test_add_band_after_grow_is_one_line(void)
 	add_bands(e, 1);
 	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "b");
 
 	struct grid *g = frame(e);
@@ -833,7 +852,7 @@ static void test_grow_clips_band_below_bottom(void)
 	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "b");
 
 	struct grid *g = frame(e);
@@ -1035,7 +1054,7 @@ static void test_shrink_brings_clipped_band_back(void)
 	type(e, "a");
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_GROW_BAND);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "b");
 
 	struct grid *clipped = frame(e);
@@ -1696,7 +1715,7 @@ static void test_step_in_then_j_and_k_change_nothing(void)
 	apply(e, EVENT_ADD_TEXT);
 	type(e, "Logout");
 	apply(e, EVENT_ESCAPE);
-	apply(e, EVENT_ADD_BAND);
+	next_band(e);
 	type(e, "x");
 	apply(e, EVENT_ESCAPE);
 	apply(e, EVENT_SELECT_UP);
@@ -2503,8 +2522,122 @@ static void test_typing_j_and_k_in_a_stacked_row_inserts_characters(void)
 	editor_free(e);
 }
 
+static void test_add_on_band_appends_selected_box(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *band = editor_selected(e);
+	const struct node *login = band->first_child;
+
+	apply(e, EVENT_ADD_BAND);
+
+	const struct node *box = editor_selected(e);
+	assert(box != band);
+	assert(box->parent == band);
+	assert(box->prev == login);
+	assert(band->last_child == box);
+	assert(box->data.style.border);
+	assert(box->data.text.cap == COLS - 1);
+	assert(editor_root(e)->first_child == band);
+	assert(band->parent == editor_root(e) && !band->next);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	editor_free(e);
+}
+
+static void test_add_on_band_keeps_move_mode(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+
+	apply(e, EVENT_ADD_BAND);
+
+	assert(editor_mode(e) == MODE_MOVE);
+
+	editor_free(e);
+}
+
+static void test_add_boxes_have_no_cap(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *band = editor_selected(e);
+
+	for (int i = 0; i < MANY_BOXES; i++) {
+		apply(e, EVENT_STEP_OUT);
+		apply(e, EVENT_ADD_BAND);
+		assert(editor_selected(e) == band->last_child);
+		assert(editor_selected(e)->data.style.border);
+	}
+
+	int children = 0;
+	for (const struct node *c = band->first_child; c; c = c->next)
+		children++;
+	assert(children == 1 + MANY_BOXES);
+
+	editor_free(e);
+}
+
+static void test_add_on_box_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *box = editor_selected(e);
+	const struct node *band = box->parent;
+
+	apply(e, EVENT_ADD_BAND);
+
+	assert(editor_selected(e) == box);
+	assert(band->last_child == box);
+	assert(!editor_root(e)->first_child->next);
+
+	editor_free(e);
+}
+
+static void test_add_on_text_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *band = editor_selected(e);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+	const struct node *text = editor_selected(e);
+	assert(text != band);
+
+	apply(e, EVENT_ADD_BAND);
+
+	assert(editor_selected(e) == text);
+	assert(band->first_child == band->last_child);
+	assert(!band->next);
+
+	editor_free(e);
+}
+
+static void test_add_text_on_band_with_box_still_capped(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_STEP_OUT);
+	const struct node *band = editor_selected(e);
+
+	apply(e, EVENT_ADD_TEXT);
+
+	assert(band->first_child->next == band->last_child);
+
+	editor_free(e);
+}
+
 int main(void)
 {
+	test_add_on_band_appends_selected_box();
+	test_add_on_band_keeps_move_mode();
+	test_add_boxes_have_no_cap();
+	test_add_on_box_is_noop();
+	test_add_on_text_is_noop();
+	test_add_text_on_band_with_box_still_capped();
 	test_new_editor_is_empty();
 	test_add_band();
 	test_new_band_text_is_normal();
