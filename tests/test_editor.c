@@ -2822,6 +2822,137 @@ static void test_switch_direction_with_nothing_selected_is_noop(void)
 	editor_free(e);
 }
 
+static void test_o_on_box_adds_selected_bordered_box_after_it(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *first = editor_selected(e);
+	const struct node *band = first->parent;
+
+	apply(e, EVENT_ADD_TEXT);
+
+	const struct node *added = editor_selected(e);
+	assert(added != first);
+	assert(added->parent == band);
+	assert(first->next == added);
+	assert(added->prev == first);
+	assert(band->last_child == added);
+	assert(added->data.style.border);
+	assert(added->data.text.len == 0);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	editor_free(e);
+}
+
+static void test_o_twice_builds_a_row_of_three_boxes(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *first = editor_selected(e);
+	const struct node *band = first->parent;
+
+	apply(e, EVENT_ADD_TEXT);
+	const struct node *second = editor_selected(e);
+	apply(e, EVENT_ADD_TEXT);
+	const struct node *third = editor_selected(e);
+
+	assert(band->first_child->next == first);
+	assert(first->next == second);
+	assert(second->next == third);
+	assert(!third->next);
+	assert(band->last_child == third);
+	assert(third->data.style.border);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	editor_free(e);
+}
+
+static void test_o_on_middle_box_inserts_between(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *a = editor_selected(e);
+	const struct node *band = a->parent;
+	apply(e, EVENT_ADD_TEXT);
+	const struct node *b = editor_selected(e);
+	apply(e, EVENT_ADD_TEXT);
+	const struct node *c = editor_selected(e);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_STEP_IN);
+	apply_and_layout(e, EVENT_SELECT_NEXT_TEXT);
+	assert(editor_selected(e) == a);
+
+	apply(e, EVENT_ADD_TEXT);
+
+	const struct node *added = editor_selected(e);
+	assert(added != a && added != b && added != c);
+	assert(a->next == added);
+	assert(added->prev == a);
+	assert(added->next == b);
+	assert(b->prev == added);
+	assert(b->next == c);
+	assert(c->prev == b);
+	assert(added->parent == band);
+	assert(c->next == NULL);
+	assert(band->last_child == c);
+
+	editor_free(e);
+}
+
+static void test_o_on_last_box_makes_new_box_last_child(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	const struct node *box = editor_selected(e);
+	const struct node *band = box->parent;
+
+	apply(e, EVENT_ADD_TEXT);
+
+	assert(band->last_child == editor_selected(e));
+	assert(band->last_child != box);
+
+	editor_free(e);
+}
+
+static void test_o_on_text_adds_nothing(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	const struct node *band = editor_selected(e);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+	const struct node *text = editor_selected(e);
+	assert(text != band);
+
+	apply(e, EVENT_ADD_TEXT);
+
+	assert(editor_selected(e) == text);
+	assert(band->first_child == band->last_child);
+	assert(!band->next);
+
+	editor_free(e);
+}
+
+static void test_o_with_nothing_selected_adds_nothing(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+
+	apply(e, EVENT_ADD_TEXT);
+
+	assert(!editor_selected(e));
+	assert(!editor_root(e)->first_child);
+
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_switch_direction_toggles_a_selected_band();
@@ -2839,6 +2970,12 @@ int main(void)
 	test_dimmed_band_draws_its_box_border_dim();
 	test_second_box_border_follows_the_first();
 	test_add_on_box_is_noop();
+	test_o_on_box_adds_selected_bordered_box_after_it();
+	test_o_twice_builds_a_row_of_three_boxes();
+	test_o_on_middle_box_inserts_between();
+	test_o_on_last_box_makes_new_box_last_child();
+	test_o_on_text_adds_nothing();
+	test_o_with_nothing_selected_adds_nothing();
 	test_add_on_text_is_noop();
 	test_add_text_on_band_with_box_still_capped();
 	test_new_editor_is_empty();

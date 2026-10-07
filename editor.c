@@ -118,6 +118,17 @@ static void add_box(struct editor *e)
 	e->selected = box;
 }
 
+static void add_box_after(struct editor *e)
+{
+	struct node *box = new_box(e);
+	if (!box)
+		return;
+
+	node_insert_after(e->selected, box);
+
+	e->selected = box;
+}
+
 struct editor *editor_new(int cols, int rows)
 {
 	struct editor *e = malloc(sizeof *e);
@@ -178,6 +189,8 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_ADD_TEXT:
 		if (is_band(e, e->selected))
 			add_text(e);
+		else if (is_box(e, e->selected))
+			add_box_after(e);
 		break;
 	case EVENT_ESCAPE:
 		e->mode = MODE_MOVE;
