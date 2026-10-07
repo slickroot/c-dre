@@ -155,9 +155,15 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_SELECT_UP:
 		if (is_band(e, e->selected) && e->selected->prev)
 			e->selected = e->selected->prev;
+		else if (is_text(e, e->selected) &&
+			 stacked_with(e->selected, e->selected->prev))
+			e->selected = e->selected->prev;
 		break;
 	case EVENT_SELECT_DOWN:
 		if (is_band(e, e->selected) && e->selected->next)
+			e->selected = e->selected->next;
+		else if (is_text(e, e->selected) &&
+			 stacked_with(e->selected, e->selected->next))
 			e->selected = e->selected->next;
 		break;
 	case EVENT_CHAR:
