@@ -206,7 +206,6 @@ static void test_free_tree_with_mixed_text_buffers(void)
 	node_append(band, t1);
 	node_append(band, t2);
 	band->data.pad = 2;
-	band->data.style.dim = 1;
 
 	node_free(root);
 }

@@ -1734,7 +1734,8 @@ static void test_step_in_then_band_keys_change_nothing(void)
 	apply(e, EVENT_STEP_IN);
 	apply(e, EVENT_ADD_TEXT);
 	apply(e, EVENT_DELETE_BAND);
-	apply(e, EVENT_TOGGLE_DIM);
+	/* spec gap: - on a selected text now flips it, see
+	 * docs/specs/035-dim-one-text.md AC1 */
 	apply(e, EVENT_GROW_BAND);
 	apply(e, EVENT_SHRINK_BAND);
 	apply(e, EVENT_ENTER_TYPE);
@@ -1746,6 +1747,88 @@ static void test_step_in_then_band_keys_change_nothing(void)
 
 	grid_free(before);
 	grid_free(after);
+	editor_free(e);
+}
+
+static void test_toggle_dim_on_a_text_leaves_its_sibling_alone(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct grid *dimmed = frame(e);
+
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(dimmed, 1, 3, "Login", DIM);
+	assert_text(dimmed, 1, right, "Logout", INK);
+
+	grid_free(dimmed);
+
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct grid *back = frame(e);
+
+	assert_text(back, 1, 3, "Login", INK);
+	assert_text(back, 1, right, "Logout", INK);
+
+	grid_free(back);
+	editor_free(e);
+}
+
+static void test_toggle_dim_on_a_text_greyed_by_the_row(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_STEP_IN);
+
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct grid *g = frame(e);
+
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", INK);
+	assert_text(g, 1, right, "Logout", DIM);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_toggle_dim_on_a_band_swaps_mixed_texts(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_STEP_IN);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_STEP_OUT);
+
+	apply(e, EVENT_TOGGLE_DIM);
+
+	struct grid *g = frame(e);
+
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, 3, "Login", DIM);
+	assert_text(g, 1, right, "Logout", INK);
+
+	grid_free(g);
 	editor_free(e);
 }
 
@@ -2214,6 +2297,9 @@ int main(void)
 	test_step_out_brings_back_the_row_highlight();
 	test_step_in_then_j_and_k_change_nothing();
 	test_step_in_then_band_keys_change_nothing();
+	test_toggle_dim_on_a_text_leaves_its_sibling_alone();
+	test_toggle_dim_on_a_text_greyed_by_the_row();
+	test_toggle_dim_on_a_band_swaps_mixed_texts();
 	test_step_in_with_nothing_selected_is_noop();
 	test_step_out_on_a_whole_row_is_noop();
 	test_typing_and_backspace_still_delete_in_type_mode();
