@@ -201,6 +201,26 @@ static void test_step_out_bytes(void)
 	assert(ev.type == EVENT_STEP_OUT);
 }
 
+static void test_h_and_l_in_move_mode(void)
+{
+	struct key_event ev = input_parse('h', MODE_MOVE);
+	assert(ev.type == EVENT_SELECT_PREV_TEXT);
+
+	ev = input_parse('l', MODE_MOVE);
+	assert(ev.type == EVENT_SELECT_NEXT_TEXT);
+}
+
+static void test_h_and_l_in_type_mode(void)
+{
+	struct key_event ev = input_parse('h', MODE_TYPE);
+	assert(ev.type == EVENT_CHAR);
+	assert(ev.ch == 'h');
+
+	ev = input_parse('l', MODE_TYPE);
+	assert(ev.type == EVENT_CHAR);
+	assert(ev.ch == 'l');
+}
+
 int main(void)
 {
 	test_quit();
@@ -227,5 +247,7 @@ int main(void)
 	test_step_in_bytes();
 	test_enter_is_none_in_type_mode();
 	test_step_out_bytes();
+	test_h_and_l_in_move_mode();
+	test_h_and_l_in_type_mode();
 	return 0;
 }
