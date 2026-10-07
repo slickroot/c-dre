@@ -1576,6 +1576,272 @@ static void test_growing_and_shrinking_flips_the_arrangement(void)
 	editor_free(e);
 }
 
+static void test_step_in_highlights_the_first_of_two_texts(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *g = frame(e);
+
+	int left = 3;
+	int right = COLS - (int)strlen("Logout") - 1;
+	assert_text(g, 1, left, "Login", INK);
+	assert_text(g, 1, right, "Logout", INK);
+	assert_bg(g, 1, 2, CANVAS);
+	assert_bg(g, 1, left, HIGHLIGHT);
+	assert_bg(g, 1, left + 4, HIGHLIGHT);
+	assert_bg(g, 1, right, CANVAS);
+	assert_bg(g, 1, right + 5, CANVAS);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_no_caret(g);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_step_in_highlights_a_lone_text(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *g = frame(e);
+
+	int col = (COLS - (int)strlen("Login")) / 2 + 1;
+	assert_text(g, 1, col, "Login", INK);
+	assert_bg(g, 1, col, HIGHLIGHT);
+	assert_bg(g, 1, col + 4, HIGHLIGHT);
+	assert_bg(g, 1, col - 1, CANVAS);
+	assert_bg(g, 1, col + 5, CANVAS);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_step_in_highlight_matches_row_highlight(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+
+	struct grid *row = frame(e);
+
+	assert_bg_rows(row, 1, 1, HIGHLIGHT);
+	int col = (COLS - (int)strlen("Login")) / 2 + 1;
+
+	grid_free(row);
+
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *g = frame(e);
+
+	assert_bg(g, 1, col, HIGHLIGHT);
+	assert_bg(g, 1, col + 4, HIGHLIGHT);
+	assert_bg(g, 1, col - 1, CANVAS);
+	assert_bg(g, 1, col + 5, CANVAS);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_step_out_brings_back_the_row_highlight(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+	apply(e, EVENT_STEP_OUT);
+
+	struct grid *g = frame(e);
+
+	assert_bg_rows(g, 1, 1, HIGHLIGHT);
+	assert_bg_rows(g, 2, ROWS, CANVAS);
+	assert_text(g, 1, 3, "Login", INK);
+	assert_text(g, 1, COLS - (int)strlen("Logout") - 1, "Logout", INK);
+	assert_no_caret(g);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_step_in_then_j_and_k_change_nothing(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "x");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_SELECT_UP);
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *before = frame(e);
+
+	apply(e, EVENT_SELECT_DOWN);
+	apply(e, EVENT_SELECT_UP);
+
+	struct grid *after = frame(e);
+
+	assert_same_frame(before, after);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	grid_free(before);
+	grid_free(after);
+	editor_free(e);
+}
+
+static void test_step_in_then_band_keys_change_nothing(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_ADD_TEXT);
+	type(e, "Logout");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *before = frame(e);
+
+	type(e, "iod-[]a");
+	apply(e, EVENT_STEP_IN);
+	apply(e, EVENT_ADD_TEXT);
+	apply(e, EVENT_DELETE_BAND);
+	apply(e, EVENT_TOGGLE_DIM);
+	apply(e, EVENT_GROW_BAND);
+	apply(e, EVENT_SHRINK_BAND);
+	apply(e, EVENT_ENTER_TYPE);
+
+	struct grid *after = frame(e);
+
+	assert_same_frame(before, after);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	grid_free(before);
+	grid_free(after);
+	editor_free(e);
+}
+
+static void test_step_in_with_nothing_selected_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *g = frame(e);
+
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_step_out_on_a_whole_row_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+	apply(e, EVENT_ESCAPE);
+
+	struct grid *before = frame(e);
+
+	apply(e, EVENT_STEP_OUT);
+
+	struct grid *after = frame(e);
+
+	assert_same_frame(before, after);
+	assert(editor_mode(e) == MODE_MOVE);
+
+	grid_free(before);
+	grid_free(after);
+	editor_free(e);
+}
+
+static void test_typing_and_backspace_still_delete_in_type_mode(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "ab");
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+	apply(e, EVENT_STEP_OUT);
+	apply(e, EVENT_ENTER_TYPE);
+	type(e, "cd");
+	apply(e, EVENT_BACKSPACE);
+
+	struct grid *g = frame(e);
+
+	int col = (COLS - (int)strlen("abc")) / 2 + 1;
+	assert_text(g, 1, col, "abc", INK);
+	assert_blank(g, 1, col + 3);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_caret(g, 1, col + 3);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	grid_free(g);
+	editor_free(e);
+}
+
+static void test_step_in_in_type_mode_is_noop(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	type(e, "Login");
+
+	struct grid *before = frame(e);
+
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *after = frame(e);
+
+	assert_same_frame(before, after);
+	assert(editor_mode(e) == MODE_TYPE);
+
+	grid_free(before);
+	grid_free(after);
+	editor_free(e);
+}
+
+static void test_step_in_on_an_empty_text_shows_no_highlight(void)
+{
+	struct editor *e = fresh(COLS, ROWS);
+	apply(e, EVENT_ADD_BAND);
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	struct grid *g = frame(e);
+
+	assert_all_blank(g);
+	assert_bg_rows(g, 1, ROWS, CANVAS);
+	assert_no_caret(g);
+
+	grid_free(g);
+	editor_free(e);
+}
+
 int main(void)
 {
 	test_new_editor_is_empty();
@@ -1643,5 +1909,16 @@ int main(void)
 	test_escape_right_after_add_text_on_a_tall_band_keeps_empty_bottom_text();
 	test_enter_type_on_a_stacked_band_types_into_the_bottom_text();
 	test_growing_and_shrinking_flips_the_arrangement();
+	test_step_in_highlights_the_first_of_two_texts();
+	test_step_in_highlights_a_lone_text();
+	test_step_in_highlight_matches_row_highlight();
+	test_step_out_brings_back_the_row_highlight();
+	test_step_in_then_j_and_k_change_nothing();
+	test_step_in_then_band_keys_change_nothing();
+	test_step_in_with_nothing_selected_is_noop();
+	test_step_out_on_a_whole_row_is_noop();
+	test_typing_and_backspace_still_delete_in_type_mode();
+	test_step_in_in_type_mode_is_noop();
+	test_step_in_on_an_empty_text_shows_no_highlight();
 	return 0;
 }
