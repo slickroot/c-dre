@@ -51,7 +51,7 @@ void display_list(const struct editor *e, struct display_list *out)
 				emit(out, OP_FILL, text->box, NULL, highlight);
 
 			emit(out, OP_TEXT, text->box, text->data.text.data,
-			     band->data.style.dim ? dim : ink);
+			     text->data.style.dim ? dim : ink);
 		}
 
 		if (band == selected && editor_mode(e) == MODE_TYPE) {

@@ -113,6 +113,11 @@ const struct node *editor_selected(const struct editor *e)
 	return e->selected;
 }
 
+static void toggle_dim(struct node *text)
+{
+	text->data.style.dim = !text->data.style.dim;
+}
+
 void editor_apply(struct editor *e, struct key_event ev)
 {
 	switch (ev.type) {
@@ -162,11 +167,12 @@ void editor_apply(struct editor *e, struct key_event ev)
 		break;
 	}
 	case EVENT_TOGGLE_DIM:
-		if (is_band(e, e->selected)) {
-			struct node *band = e->selected;
-
-			band->data.style.dim = !band->data.style.dim;
-		}
+		if (is_text(e, e->selected))
+			toggle_dim(e->selected);
+		else if (is_band(e, e->selected))
+			for (struct node *text = e->selected->first_child; text;
+			     text = text->next)
+				toggle_dim(text);
 		break;
 	case EVENT_GROW_BAND:
 		if (is_band(e, e->selected))
