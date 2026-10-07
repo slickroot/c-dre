@@ -46,9 +46,13 @@ void display_list(const struct editor *e, struct display_list *out)
 			emit(out, OP_FILL, band->box, NULL, highlight);
 
 		for (const struct node *text = band->first_child; text;
-		     text = text->next)
+		     text = text->next) {
+			if (text == selected && editor_mode(e) == MODE_MOVE)
+				emit(out, OP_FILL, text->box, NULL, highlight);
+
 			emit(out, OP_TEXT, text->box, text->data.text.data,
 			     band->data.style.dim ? dim : ink);
+		}
 
 		if (band == selected && editor_mode(e) == MODE_TYPE) {
 			const struct node *t = band->last_child;
