@@ -39,6 +39,42 @@ static struct rect text_box(int row, int pad, int cols, int len, int index,
 	return r;
 }
 
+static int layout_row(struct node *band, int top, int cols)
+{
+	int count = 0;
+	int tallest = 0;
+	for (struct node *c = band->first_child; c; c = c->next) {
+		if (is_box(c))
+			tallest = BOX_ROWS;
+		else
+			count++;
+	}
+
+	int height = 2 * band->data.pad + 1;
+	if (tallest > height)
+		height = tallest;
+
+	int mid = top + (height - 1) / 2;
+	int next_col = 1;
+	int i = 0;
+	for (struct node *c = band->first_child; c; c = c->next) {
+		if (is_box(c))
+			continue;
+		c->box = text_box(mid, band->data.pad, cols, c->data.text.len,
+				  i++, count);
+		next_col = c->box.col + c->box.cols + CHILD_GAP;
+	}
+
+	for (struct node *c = band->first_child; c; c = c->next) {
+		if (!is_box(c))
+			continue;
+		c->box = box_rect(mid, next_col, c->data.text.len);
+		next_col = c->box.col + c->box.cols + CHILD_GAP;
+	}
+
+	return height;
+}
+
 void layout(struct node *root, int cols, int rows)
 {
 	root->box.row = 1;
@@ -54,38 +90,7 @@ void layout(struct node *root, int cols, int rows)
 		band->box.row = top;
 		band->box.col = 1;
 		band->box.cols = cols;
-
-		int count = 0;
-		int tallest = 0;
-		for (struct node *c = band->first_child; c; c = c->next) {
-			if (is_box(c))
-				tallest = BOX_ROWS;
-			else
-				count++;
-		}
-
-		band->box.rows = 2 * band->data.pad + 1;
-		if (tallest > band->box.rows)
-			band->box.rows = tallest;
-
-		int mid = top + (band->box.rows - 1) / 2;
-		int next_col = 1;
-		int i = 0;
-		for (struct node *c = band->first_child; c; c = c->next) {
-			if (is_box(c))
-				continue;
-			c->box = text_box(mid, band->data.pad, cols,
-					  c->data.text.len, i++, count);
-			next_col = c->box.col + c->box.cols + CHILD_GAP;
-		}
-
-		for (struct node *c = band->first_child; c; c = c->next) {
-			if (!is_box(c))
-				continue;
-			c->box = box_rect(mid, next_col, c->data.text.len);
-			next_col = c->box.col + c->box.cols + CHILD_GAP;
-		}
-
+		band->box.rows = layout_row(band, top, cols);
 		top += band->box.rows;
 	}
 }
