@@ -32,6 +32,23 @@ static int is_text(const struct editor *e, const struct node *n)
 	return n && is_band(e, n->parent);
 }
 
+static int same_row(const struct node *a, const struct node *b)
+{
+	return a->box.row == b->box.row;
+}
+
+/* Sibling shown beside the text, in the same row; NULL if none. */
+static struct node *beside(const struct node *text, struct node *sibling)
+{
+	return sibling && same_row(text, sibling) ? sibling : NULL;
+}
+
+/* Sibling shown above or below the text, in another row; NULL if none. */
+static struct node *stacked_with(const struct node *text, struct node *sibling)
+{
+	return sibling && !same_row(text, sibling) ? sibling : NULL;
+}
+
 static struct node *active_text(struct node *band)
 {
 	return band->last_child;
@@ -138,9 +155,15 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_SELECT_UP:
 		if (is_band(e, e->selected) && e->selected->prev)
 			e->selected = e->selected->prev;
+		else if (is_text(e, e->selected) &&
+			 stacked_with(e->selected, e->selected->prev))
+			e->selected = e->selected->prev;
 		break;
 	case EVENT_SELECT_DOWN:
 		if (is_band(e, e->selected) && e->selected->next)
+			e->selected = e->selected->next;
+		else if (is_text(e, e->selected) &&
+			 stacked_with(e->selected, e->selected->next))
 			e->selected = e->selected->next;
 		break;
 	case EVENT_CHAR:
@@ -193,14 +216,12 @@ void editor_apply(struct editor *e, struct key_event ev)
 		break;
 	case EVENT_SELECT_PREV_TEXT:
 		if (e->mode == MODE_MOVE && is_text(e, e->selected) &&
-		    e->selected->prev &&
-		    e->selected->prev->box.row == e->selected->box.row)
+		    beside(e->selected, e->selected->prev))
 			e->selected = e->selected->prev;
 		break;
 	case EVENT_SELECT_NEXT_TEXT:
 		if (e->mode == MODE_MOVE && is_text(e, e->selected) &&
-		    e->selected->next &&
-		    e->selected->next->box.row == e->selected->box.row)
+		    beside(e->selected, e->selected->next))
 			e->selected = e->selected->next;
 		break;
 	case EVENT_QUIT:
