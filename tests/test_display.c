@@ -322,6 +322,71 @@ static struct editor *two_text_band(void)
 	return e;
 }
 
+static void test_selected_text_highlight_replaces_the_band_highlight(void)
+{
+	struct editor *e = two_text_band();
+
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	struct node *band = editor_root(e)->first_child;
+	struct node *first = band->first_child;
+	struct node *second = band->last_child;
+
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	assert(fills_with_colour(&dl, HIGHLIGHT) == 1);
+	assert(find_fill(&dl, band->box, HIGHLIGHT) == -1);
+	assert(find_fill(&dl, first->box, HIGHLIGHT) >= 0);
+	assert(find_fill(&dl, second->box, HIGHLIGHT) == -1);
+
+	editor_free(e);
+}
+
+static void test_selected_text_highlight_precedes_its_own_text(void)
+{
+	struct editor *e = two_text_band();
+
+	apply(e, EVENT_ESCAPE);
+	apply(e, EVENT_STEP_IN);
+
+	struct node *first = editor_root(e)->first_child->first_child;
+
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	int fill = find_fill(&dl, first->box, HIGHLIGHT);
+	int text = find_text(&dl, first->box);
+
+	assert(fill >= 0);
+	assert(text >= 0);
+	assert(fill < text);
+
+	editor_free(e);
+}
+
+static void test_selected_band_fills_no_text(void)
+{
+	struct editor *e = two_text_band();
+
+	apply(e, EVENT_ESCAPE);
+
+	struct node *band = editor_root(e)->first_child;
+
+	struct display_list dl;
+
+	render(e, COLS, ROWS, &dl);
+
+	assert(find_fill(&dl, band->box, HIGHLIGHT) >= 0);
+	assert(find_fill(&dl, band->first_child->box, HIGHLIGHT) == -1);
+	assert(find_fill(&dl, band->last_child->box, HIGHLIGHT) == -1);
+
+	editor_free(e);
+}
+
 static void test_caret_is_on_the_last_text_in_type_mode(void)
 {
 	struct editor *e = two_text_band();
@@ -515,6 +580,9 @@ int main(void)
 	test_caret_is_on_the_last_text_in_type_mode();
 	test_no_caret_in_move_mode();
 	test_caret_moves_with_the_selection();
+	test_selected_text_highlight_replaces_the_band_highlight();
+	test_selected_text_highlight_precedes_its_own_text();
+	test_selected_band_fills_no_text();
 	test_clips_at_the_first_band_past_the_screen();
 	test_clips_a_padded_band_whose_text_row_is_past_the_screen();
 	test_op_count_matches_the_tree_when_it_fits();

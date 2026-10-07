@@ -177,13 +177,28 @@ static void test_backspace_bytes(void)
 	assert(ev.type == EVENT_BACKSPACE);
 }
 
-static void test_backspace_is_none_in_move_mode(void)
+static void test_step_in_bytes(void)
+{
+	struct key_event ev = input_parse(0x0d, MODE_MOVE);
+	assert(ev.type == EVENT_STEP_IN);
+
+	ev = input_parse(0x0a, MODE_MOVE);
+	assert(ev.type == EVENT_STEP_IN);
+}
+
+static void test_enter_is_none_in_type_mode(void)
+{
+	struct key_event ev = input_parse(0x0d, MODE_TYPE);
+	assert(ev.type == EVENT_NONE);
+}
+
+static void test_step_out_bytes(void)
 {
 	struct key_event ev = input_parse(0x7f, MODE_MOVE);
-	assert(ev.type == EVENT_NONE);
+	assert(ev.type == EVENT_STEP_OUT);
 
 	ev = input_parse(0x08, MODE_MOVE);
-	assert(ev.type == EVENT_NONE);
+	assert(ev.type == EVENT_STEP_OUT);
 }
 
 int main(void)
@@ -209,6 +224,8 @@ int main(void)
 	test_shrink_band_key();
 	test_move_mode_ignores_typing_keys();
 	test_backspace_bytes();
-	test_backspace_is_none_in_move_mode();
+	test_step_in_bytes();
+	test_enter_is_none_in_type_mode();
+	test_step_out_bytes();
 	return 0;
 }

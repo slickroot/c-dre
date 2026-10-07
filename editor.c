@@ -22,6 +22,11 @@ static struct node *new_text(struct editor *e)
 	return t;
 }
 
+static int is_band(const struct editor *e, const struct node *n)
+{
+	return n && n->parent == e->root;
+}
+
 static struct node *active_text(struct node *band)
 {
 	return band->last_child;
@@ -110,34 +115,36 @@ void editor_apply(struct editor *e, struct key_event ev)
 		add_band(e);
 		break;
 	case EVENT_ADD_TEXT:
-		add_text(e);
+		if (is_band(e, e->selected))
+			add_text(e);
 		break;
 	case EVENT_ESCAPE:
 		e->mode = MODE_MOVE;
 		break;
 	case EVENT_ENTER_TYPE:
-		e->mode = MODE_TYPE;
+		if (is_band(e, e->selected))
+			e->mode = MODE_TYPE;
 		break;
 	case EVENT_SELECT_UP:
-		if (e->selected && e->selected->prev)
+		if (is_band(e, e->selected) && e->selected->prev)
 			e->selected = e->selected->prev;
 		break;
 	case EVENT_SELECT_DOWN:
-		if (e->selected && e->selected->next)
+		if (is_band(e, e->selected) && e->selected->next)
 			e->selected = e->selected->next;
 		break;
 	case EVENT_CHAR:
-		if (e->selected)
+		if (is_band(e, e->selected))
 			text_buffer_insert(&active_text(e->selected)->data.text,
 					   ev.ch);
 		break;
 	case EVENT_BACKSPACE:
-		if (e->selected)
+		if (is_band(e, e->selected))
 			text_buffer_backspace(
 				&active_text(e->selected)->data.text);
 		break;
 	case EVENT_DELETE_BAND: {
-		if (!e->selected)
+		if (!is_band(e, e->selected))
 			break;
 
 		struct node *heir = e->selected->prev;
@@ -150,19 +157,28 @@ void editor_apply(struct editor *e, struct key_event ev)
 		break;
 	}
 	case EVENT_TOGGLE_DIM:
-		if (e->selected) {
+		if (is_band(e, e->selected)) {
 			struct node *band = e->selected;
 
 			band->data.style.dim = !band->data.style.dim;
 		}
 		break;
 	case EVENT_GROW_BAND:
-		if (e->selected)
+		if (is_band(e, e->selected))
 			e->selected->data.pad++;
 		break;
 	case EVENT_SHRINK_BAND:
-		if (e->selected && e->selected->data.pad > 0)
+		if (is_band(e, e->selected) && e->selected->data.pad > 0)
 			e->selected->data.pad--;
+		break;
+	case EVENT_STEP_IN:
+		if (e->mode == MODE_MOVE && is_band(e, e->selected) &&
+		    e->selected->first_child)
+			e->selected = e->selected->first_child;
+		break;
+	case EVENT_STEP_OUT:
+		if (e->selected && !is_band(e, e->selected))
+			e->selected = e->selected->parent;
 		break;
 	case EVENT_QUIT:
 	case EVENT_NONE:
