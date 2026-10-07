@@ -27,6 +27,11 @@ static int is_band(const struct editor *e, const struct node *n)
 	return n && n->parent == e->root;
 }
 
+static int is_text(const struct editor *e, const struct node *n)
+{
+	return n && is_band(e, n->parent);
+}
+
 static struct node *active_text(struct node *band)
 {
 	return band->last_child;
@@ -179,6 +184,18 @@ void editor_apply(struct editor *e, struct key_event ev)
 	case EVENT_STEP_OUT:
 		if (e->selected && !is_band(e, e->selected))
 			e->selected = e->selected->parent;
+		break;
+	case EVENT_SELECT_PREV_TEXT:
+		if (e->mode == MODE_MOVE && is_text(e, e->selected) &&
+		    e->selected->prev &&
+		    e->selected->prev->box.row == e->selected->box.row)
+			e->selected = e->selected->prev;
+		break;
+	case EVENT_SELECT_NEXT_TEXT:
+		if (e->mode == MODE_MOVE && is_text(e, e->selected) &&
+		    e->selected->next &&
+		    e->selected->next->box.row == e->selected->box.row)
+			e->selected = e->selected->next;
 		break;
 	case EVENT_QUIT:
 	case EVENT_NONE:
