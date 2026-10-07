@@ -27,9 +27,19 @@ static int is_band(const struct editor *e, const struct node *n)
 	return n && n->parent == e->root;
 }
 
-static int is_text(const struct editor *e, const struct node *n)
+static int is_child_of_band(const struct editor *e, const struct node *n)
 {
 	return n && is_band(e, n->parent);
+}
+
+static int is_box(const struct editor *e, const struct node *n)
+{
+	return is_child_of_band(e, n) && n->data.style.border;
+}
+
+static int is_text(const struct editor *e, const struct node *n)
+{
+	return is_child_of_band(e, n) && !is_box(e, n);
 }
 
 static int same_row(const struct node *a, const struct node *b)
@@ -87,6 +97,18 @@ static void add_text(struct editor *e)
 	e->mode = MODE_TYPE;
 }
 
+static void add_box(struct editor *e)
+{
+	struct node *box = new_text(e);
+	if (!box)
+		return;
+
+	box->data.style.border = 1;
+	node_append(e->selected, box);
+
+	e->selected = box;
+}
+
 struct editor *editor_new(int cols, int rows)
 {
 	struct editor *e = malloc(sizeof *e);
@@ -138,8 +160,11 @@ static void toggle_dim(struct node *text)
 void editor_apply(struct editor *e, struct key_event ev)
 {
 	switch (ev.type) {
-	case EVENT_ADD_BAND:
-		add_band(e);
+	case EVENT_ADD_BAND: /* the `a` key */
+		if (!e->selected)
+			add_band(e);
+		else if (is_band(e, e->selected))
+			add_box(e);
 		break;
 	case EVENT_ADD_TEXT:
 		if (is_band(e, e->selected))

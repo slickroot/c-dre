@@ -7,13 +7,13 @@
 
 #define DISPLAY_MAX_OPS 1024
 
-enum op_kind { OP_FILL, OP_TEXT };
+enum op_kind { OP_FILL, OP_TEXT, OP_BORDER };
 
 struct op {
 	enum op_kind kind;
 	struct rect rect;
 	const char *text; /* TEXT only */
-	uint32_t colour;  /* FILL: background; TEXT: foreground */
+	uint32_t colour;  /* FILL: background; TEXT, BORDER: foreground */
 };
 
 struct display_list {

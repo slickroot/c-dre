@@ -6,6 +6,7 @@
 
 struct style {
 	int dim;
+	int border;
 };
 
 struct node_data {

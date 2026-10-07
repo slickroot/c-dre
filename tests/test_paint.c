@@ -40,6 +40,17 @@ static void push_text(struct display_list *dl, int row, int col,
 	op->colour = colour;
 }
 
+static void push_border(struct display_list *dl, struct rect r,
+			uint32_t colour)
+{
+	struct op *op = &dl->ops[dl->count++];
+
+	op->kind = OP_BORDER;
+	op->rect = r;
+	op->text = NULL;
+	op->colour = colour;
+}
+
 static struct display_list empty(void)
 {
 	struct display_list dl;
@@ -283,6 +294,58 @@ static void test_caret_hidden_when_not_visible(void)
 	grid_free(g);
 }
 
+static void test_border_op_draws_corners_edges_and_sides(void)
+{
+	struct display_list dl = empty();
+
+	push_border(&dl, rect(2, 3, 3, 5), INK);
+
+	struct grid *g = paint(&dl);
+
+	assert_cell(g, 2, 3, BORDER_CORNER, INK, 0);
+	assert_cell(g, 2, 4, BORDER_HORIZONTAL, INK, 0);
+	assert_cell(g, 2, 6, BORDER_HORIZONTAL, INK, 0);
+	assert_cell(g, 2, 7, BORDER_CORNER, INK, 0);
+	assert_cell(g, 3, 3, BORDER_VERTICAL, INK, 0);
+	assert_cell(g, 3, 7, BORDER_VERTICAL, INK, 0);
+	assert_cell(g, 4, 3, BORDER_CORNER, INK, 0);
+	assert_cell(g, 4, 5, BORDER_HORIZONTAL, INK, 0);
+	assert_cell(g, 4, 7, BORDER_CORNER, INK, 0);
+	assert_cell(g, 3, 4, ' ', 0, 0);
+	assert_cell(g, 3, 6, ' ', 0, 0);
+
+	grid_free(g);
+}
+
+static void test_border_op_uses_its_colour_and_keeps_the_background(void)
+{
+	struct display_list dl = empty();
+
+	push_fill(&dl, rect(2, 3, 3, 2), HIGHLIGHT);
+	push_border(&dl, rect(2, 3, 3, 2), DIM);
+
+	struct grid *g = paint(&dl);
+
+	assert_cell(g, 2, 3, BORDER_CORNER, DIM, HIGHLIGHT);
+	assert_cell(g, 3, 4, BORDER_VERTICAL, DIM, HIGHLIGHT);
+
+	grid_free(g);
+}
+
+static void test_border_op_clips_at_the_grid_edge(void)
+{
+	struct display_list dl = empty();
+
+	push_border(&dl, rect(ROWS - 1, COLS - 1, 3, 2), INK);
+
+	struct grid *g = paint(&dl);
+
+	assert_cell(g, ROWS - 1, COLS - 1, BORDER_CORNER, INK, 0);
+	assert_cell(g, ROWS, COLS, BORDER_VERTICAL, INK, 0);
+
+	grid_free(g);
+}
+
 static void test_paint_clears_a_cursor_left_by_an_earlier_frame(void)
 {
 	struct display_list dl = empty();
@@ -355,6 +418,9 @@ int main(void)
 	test_two_texts_side_by_side();
 	test_caret_visible_places_the_cursor();
 	test_caret_hidden_when_not_visible();
+	test_border_op_draws_corners_edges_and_sides();
+	test_border_op_uses_its_colour_and_keeps_the_background();
+	test_border_op_clips_at_the_grid_edge();
 	test_paint_clears_a_cursor_left_by_an_earlier_frame();
 	test_fill_past_the_edges_is_clipped_by_the_grid();
 	test_text_past_the_edges_is_clipped_by_the_grid();

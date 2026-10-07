@@ -11,6 +11,9 @@
 #define TEXT_CAP 32
 
 #define LEFT_COL 3
+#define BOX_BORDER_COLS 2
+#define BOX_ROWS 3
+#define CHILD_GAP 1
 
 static void assert_rect(struct rect got, int row, int col, int rows, int cols)
 {
@@ -29,6 +32,24 @@ static struct node *new_text(const char *s)
 	for (; *s; s++)
 		assert(text_buffer_insert(&n->data.text, *s));
 	return n;
+}
+
+static struct node *new_box(const char *s)
+{
+	struct node *n = new_text(s);
+
+	n->data.style.border = 1;
+	return n;
+}
+
+static int box_cols(int len)
+{
+	return len + BOX_BORDER_COLS;
+}
+
+static int col_after(struct rect r)
+{
+	return r.col + r.cols + CHILD_GAP;
 }
 
 static struct node *new_band(int pad)
@@ -222,6 +243,128 @@ static void test_negative_cols_boxes_only_the_root(void)
 	node_free(root);
 }
 
+static void test_lone_text_keeps_its_column_when_a_box_is_added(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(0);
+
+	node_append(band, new_text("Login"));
+	node_append(band, new_box(""));
+	node_append(root, band);
+
+	layout(root, COLS, ROWS);
+
+	assert_rect(band->first_child->box, 2, centred(5), 1, 5);
+
+	node_free(root);
+}
+
+static void test_box_goes_after_the_text_with_a_gap(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(0);
+
+	node_append(band, new_text("Login"));
+	node_append(band, new_box("ab"));
+	node_append(root, band);
+
+	layout(root, COLS, ROWS);
+
+	struct rect text = band->first_child->box;
+	assert_rect(band->last_child->box, text.row - 1, col_after(text),
+		    BOX_ROWS, box_cols(2));
+
+	node_free(root);
+}
+
+static void test_boxes_follow_each_other_with_a_gap(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(0);
+
+	node_append(band, new_text("Login"));
+	node_append(band, new_box(""));
+	node_append(band, new_box("abc"));
+	node_append(root, band);
+
+	layout(root, COLS, ROWS);
+
+	struct node *first = band->first_child->next;
+	assert_rect(band->last_child->box, first->box.row, col_after(first->box),
+		    BOX_ROWS, box_cols(3));
+
+	node_free(root);
+}
+
+static void test_band_grows_to_the_box_height(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(0);
+
+	node_append(band, new_text("Login"));
+	node_append(band, new_box(""));
+	node_append(root, band);
+	node_append(root, new_band(0));
+
+	layout(root, COLS, ROWS);
+
+	assert_rect(band->box, 1, 1, BOX_ROWS, COLS);
+	assert_rect(band->next->box, 1 + BOX_ROWS, 1, 1, COLS);
+
+	node_free(root);
+}
+
+static void test_text_and_box_share_the_band_middle_row(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(0);
+
+	node_append(band, new_text("Login"));
+	node_append(band, new_box(""));
+	node_append(root, band);
+
+	layout(root, COLS, ROWS);
+
+	int mid = band->box.row + (band->box.rows - 1) / 2;
+	assert(band->first_child->box.row == mid);
+	assert(band->last_child->box.row + 1 == mid);
+
+	node_free(root);
+}
+
+static void test_tall_pad_keeps_its_height_with_a_box(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(2);
+
+	node_append(band, new_text("Login"));
+	node_append(band, new_box(""));
+	node_append(root, band);
+
+	layout(root, COLS, ROWS);
+
+	assert_rect(band->box, 1, 1, 5, COLS);
+	assert(band->first_child->box.row == 3);
+	assert(band->last_child->box.row == 2);
+
+	node_free(root);
+}
+
+static void test_box_alone_in_a_band_starts_at_the_first_column(void)
+{
+	struct node *root = new_tree();
+	struct node *band = new_band(0);
+
+	node_append(band, new_box("ab"));
+	node_append(root, band);
+
+	layout(root, COLS, ROWS);
+
+	assert_rect(band->first_child->box, 1, 1, BOX_ROWS, box_cols(2));
+
+	node_free(root);
+}
+
 int main(void)
 {
 	test_root_box_is_the_whole_screen();
@@ -234,5 +377,12 @@ int main(void)
 	test_bands_below_the_screen_still_get_boxes();
 	test_not_positive_cols_boxes_only_the_root();
 	test_negative_cols_boxes_only_the_root();
+	test_lone_text_keeps_its_column_when_a_box_is_added();
+	test_box_goes_after_the_text_with_a_gap();
+	test_boxes_follow_each_other_with_a_gap();
+	test_band_grows_to_the_box_height();
+	test_text_and_box_share_the_band_middle_row();
+	test_tall_pad_keeps_its_height_with_a_box();
+	test_box_alone_in_a_band_starts_at_the_first_column();
 	return 0;
 }
